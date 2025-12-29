@@ -1,5 +1,73 @@
-streamlit==1.31.0
-pandas==2.1.4
-plotly==5.18.0
-anthropic==0.18.1
-pytz==2023.3
+streamlit>=1.31.0
+pandas>=2.2.0
+plotly>=5.18.0
+anthropic>=0.18.1
+pytz>=2023.3
+```
+
+4. Click **"Commit changes"**
+
+---
+
+### **FIX 2: Move `app.py` to Root (if needed)**
+
+Check if your `app.py` is in the root folder or inside `.streamlit/`:
+
+1. In your GitHub repo, you should see:
+```
+   ├── .streamlit/
+   │   └── config.toml
+   ├── app.py          ← Should be HERE (root)
+   ├── database.py
+   ├── achievements.py
+   ├── etc...
+```
+
+If `app.py` is inside `.streamlit/`, you need to move it:
+
+**Option A: Via GitHub Web Interface:**
+1. Open `.streamlit/app.py` (if it's there)
+2. Copy all the code
+3. Go back to root
+4. Create new file: `app.py`
+5. Paste the code
+6. Delete `.streamlit/app.py`
+
+**Option B: Simpler - Just tell Streamlit the correct path:**
+- When deploying, if the path is wrong, you can change it in Streamlit settings
+
+---
+
+### **FIX 3: Redeploy on Streamlit**
+
+1. Go to: https://share.streamlit.io
+2. Find your app
+3. Click the **⋮** menu (three dots)
+4. Click **"Settings"**
+5. Verify:
+   - **Main file path:** `app.py` (NOT `.streamlit/app.py`)
+6. Click **"Reboot app"** or **"Redeploy"**
+
+---
+
+## **🚀 ALTERNATIVE: FRESH START (RECOMMENDED)**
+
+If you want a clean slate, let's create a new deployment with the correct setup:
+
+### **Step 1: Update requirements.txt (Already done above)**
+
+### **Step 2: Ensure correct file structure**
+
+Your repository should look like this:
+```
+goal-quest-python/
+├── .streamlit/
+│   └── config.toml
+├── app.py              ← Main file (at root!)
+├── database.py
+├── achievements.py
+├── ai_coach.py
+├── utils.py
+├── requirements.txt
+├── README.md
+└── .gitignore
