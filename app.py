@@ -327,6 +327,8 @@ else:
             "🏠 Dashboard": "Dashboard",
             "⚡ Habits": "Habits",
             "🎯 Goals": "Goals",
+            "🤖 AI Coach": "AI Coach",
+            "📚 Library": "Library",
             "🛒 Shop": "Shop",
             "🎒 Inventory": "Inventory",
             "📊 Analytics": "Analytics",
