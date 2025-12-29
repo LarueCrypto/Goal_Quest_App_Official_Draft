@@ -553,4 +553,198 @@ THEMES:
             "quote": selected_quote["quote"],
             "philosophy": philosophy,
             "tradition": tradition
+        
+        def chunk_pdf_content(self, content: str, filename: str) -> List[Dict]:
+        """Intelligently chunk PDF into searchable segments"""
+        
+        segments = []
+        
+        # Split by double newlines (paragraphs)
+        paragraphs = content.split('\n\n')
+        
+        current_segment = ""
+        segment_number = 0
+        word_count = 0
+        
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            para_words = len(para.split())
+            
+            # If current segment would be too large, save it
+            if word_count + para_words > 500 and current_segment:
+                segments.append({
+                    'type': 'paragraph',
+                    'number': segment_number,
+                    'content': current_segment.strip(),
+                    'word_count': word_count,
+                    'key_terms': self._extract_key_terms(current_segment)
+                })
+                
+                current_segment = ""
+                word_count = 0
+                segment_number += 1
+            
+            current_segment += para + "\n\n"
+            word_count += para_words
+        
+        # Save last segment
+        if current_segment:
+            segments.append({
+                'type': 'paragraph',
+                'number': segment_number,
+                'content': current_segment.strip(),
+                'word_count': word_count,
+                'key_terms': self._extract_key_terms(current_segment)
+            })
+        
+        return segments
+    
+    def _extract_key_terms(self, text: str) -> List[str]:
+        """Extract key terms from text segment"""
+        # Simple extraction
+        words = text.lower().split()
+        
+        # Filter out common words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+                      'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be',
+                      'this', 'that', 'these', 'those', 'it', 'its', 'i', 'you', 'he', 'she'}
+        
+        # Get unique important words (longer than 4 chars)
+        key_terms = list(set([
+            word.strip('.,!?;:()[]{}"\'-') 
+            for word in words 
+            if len(word) > 4 and word not in stop_words
+        ]))
+        
+        return key_terms[:20]  # Top 20 terms
+    
+    def ai_find_information(self, query: str, documents_content: str, user_name: str = "Hunter") -> Dict:
+        """Use AI to find specific information across documents"""
+        
+        if self.client and documents_content:
+            try:
+                message = self.client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=3000,
+                    messages=[{
+                        "role": "user",
+                        "content": f"""You are helping {user_name} find specific information in their philosophy library.
+
+User's Question/Search: {query}
+
+Library Content:
+{documents_content[:50000]}
+
+Your task:
+1. Find ALL relevant passages that answer the question
+2. Quote the exact text (with "..." for context)
+3. Explain how each passage relates to the question
+4. Synthesize a clear answer
+
+Format your response as:
+
+ANSWER:
+[Your synthesized answer here]
+
+RELEVANT PASSAGES:
+---
+Passage 1:
+"[exact quote]"
+Relevance: [how this relates]
+---
+Passage 2:
+"[exact quote]"
+Relevance: [how this relates]
+---
+[continue for all relevant passages]
+
+Be thorough - find ALL relevant information."""
+                    }]
+                )
+                
+                response = message.content[0].text.strip()
+                
+                # Parse response
+                answer = ""
+                passages = []
+                
+                current_section = None
+                current_passage = {}
+                
+                for line in response.split('\n'):
+                    line_stripped = line.strip()
+                    
+                    if line_stripped.startswith('ANSWER:'):
+                        current_section = 'answer'
+                        continue
+                    elif line_stripped.startswith('RELEVANT PASSAGES:'):
+                        current_section = 'passages'
+                        continue
+                    elif line_stripped == '---':
+                        if current_passage:
+                            passages.append(current_passage)
+                            current_passage = {}
+                        continue
+                    
+                    if current_section == 'answer' and line_stripped:
+                        answer += line + "\n"
+                    elif current_section == 'passages':
+                        if line_stripped.startswith('Passage'):
+                            continue
+                        elif line_stripped.startswith('"'):
+                            current_passage['quote'] = line_stripped.strip('"')
+                        elif line_stripped.startswith('Relevance:'):
+                            current_passage['relevance'] = line_stripped.replace('Relevance:', '').strip()
+                
+                if current_passage:
+                    passages.append(current_passage)
+                
+                return {
+                    'answer': answer.strip(),
+                    'passages': passages,
+                    'found': len(passages) > 0
+                }
+                
+            except Exception as e:
+                print(f"AI search error: {e}")
+        
+        return {
+            'answer': f"Could not search documents. Please ensure you have documents uploaded and an API key configured.",
+            'passages': [],
+            'found': False
+        }
+    
+    def summarize_pdf_section(self, section_content: str, section_title: str = "Section") -> str:
+        """Summarize a specific section of PDF with 10-20 key points"""
+        
+        if self.client and section_content:
+            try:
+                message = self.client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=2000,
+                    messages=[{
+                        "role": "user",
+                        "content": f"""Summarize this section with 10-20 bullet points capturing ALL key concepts, insights, and important details.
+
+Section: {section_title}
+
+Content:
+{section_content[:15000]}
+
+Format as a comprehensive bulleted list. Each bullet should capture a distinct concept or insight. Be thorough."""
+                    }]
+                )
+                
+                return message.content[0].text.strip()
+                
+            except Exception as e:
+                print(f"Summarization error: {e}")
+        
+        # Fallback
+        sentences = section_content.split('.')[:10]
+        bullets = [f"• {s.strip()}" for s in sentences if s.strip()]
+        return "\n".join(bullets) if bullets else "No summary available"
         }
