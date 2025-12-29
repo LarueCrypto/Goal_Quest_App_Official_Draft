@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from typing import Tuple, List
 import pytz
 
@@ -11,12 +11,11 @@ def get_cst_date():
     """Get current date in CST as string"""
     return get_cst_now().strftime('%Y-%m-%d')
 
-def calculate_streak(completions: List[dict]) -> int:
+def calculate_streak(completions):
     """Calculate current streak from completion records"""
     if not completions:
         return 0
     
-    # Sort by date descending
     sorted_completions = sorted(completions, key=lambda x: x['date'], reverse=True)
     
     today = get_cst_date()
@@ -25,7 +24,6 @@ def calculate_streak(completions: List[dict]) -> int:
     streak = 0
     for completion in sorted_completions:
         comp_date = datetime.strptime(completion['date'], '%Y-%m-%d').date()
-        
         expected_date = current_date - timedelta(days=streak)
         
         if comp_date == expected_date:
@@ -35,7 +33,7 @@ def calculate_streak(completions: List[dict]) -> int:
     
     return streak
 
-def format_xp(xp: int) -> str:
+def format_xp(xp):
     """Format XP with K/M suffixes"""
     if xp >= 1000000:
         return f"{xp/1000000:.1f}M"
@@ -43,23 +41,23 @@ def format_xp(xp: int) -> str:
         return f"{xp/1000:.1f}K"
     return str(xp)
 
-def get_rank_color(level: int) -> str:
+def get_rank_color(level):
     """Get color for level/rank"""
     if level >= 100:
-        return "#ffd700"  # Gold
+        return "#ffd700"
     elif level >= 50:
-        return "#c0c0c0"  # Silver
+        return "#c0c0c0"
     elif level >= 20:
-        return "#cd7f32"  # Bronze
-    return "#808080"  # Gray
+        return "#cd7f32"
+    return "#808080"
 
-def get_completion_percentage(completed: int, total: int) -> int:
+def get_completion_percentage(completed, total):
     """Calculate completion percentage"""
     if total == 0:
         return 0
     return int((completed / total) * 100)
 
-def get_date_range(period: str) -> Tuple[str, str]:
+def get_date_range(period):
     """Get date range for analytics periods"""
     today = get_cst_now().date()
     
@@ -80,4 +78,3 @@ def get_date_range(period: str) -> Tuple[str, str]:
         return start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
     
     return today.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d')
-```
