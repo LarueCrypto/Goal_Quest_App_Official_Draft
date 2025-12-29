@@ -24,10 +24,7 @@ def calculate_streak(completions: list) -> int:
     streak = 0
     current_date = today
     
-    # Sort completions by date (most recent first)
     sorted_dates = sorted([c['date'] for c in completions], reverse=True)
-    
-    # Convert string dates to date objects if needed
     sorted_dates = [d if isinstance(d, date) else datetime.fromisoformat(d).date() for d in sorted_dates]
     
     for completion_date in sorted_dates:
@@ -46,15 +43,12 @@ def get_date_range(period: str) -> tuple:
     if period == "daily":
         return today, today
     elif period == "weekly":
-        # Start of current week (Monday)
         start = today - timedelta(days=today.weekday())
         return start, today
     elif period == "monthly":
-        # Start of current month
         start = today.replace(day=1)
         return start, today
     elif period == "yearly":
-        # Start of current year
         start = today.replace(month=1, day=1)
         return start, today
     else:
@@ -67,7 +61,7 @@ def get_completion_percentage(completed: int, total: int) -> int:
     return int((completed / total) * 100)
 
 def format_time_ago(dt: datetime) -> str:
-    """Format datetime as 'X time ago'"""
+    """Format datetime as X time ago"""
     if isinstance(dt, str):
         dt = datetime.fromisoformat(dt)
     
@@ -104,7 +98,7 @@ def validate_habit_frequency(frequency: str, frequency_days: list = None) -> boo
     return True
 
 def get_level_from_xp(xp: int) -> int:
-    """Calculate level from total XP (level N requires N * 500 XP)"""
+    """Calculate level from total XP"""
     level = 1
     current_xp = xp
     
