@@ -730,6 +730,97 @@ class Database:
         c.execute("SELECT content FROM philosophy_documents WHERE content IS NOT NULL")
         rows = c.fetchall()
         return "\n\n---\n\n".join([row[0] for row in rows if row[0]])
+
+    # ===== PDF SEGMENTS & SEARCH =====
+    def create_segments_table(self):
+        """Create table for PDF segments/chunks"""
+        conn = self.get_connection()
+        c = conn.cursor()
+        
+        c.execute('''CREATE TABLE IF NOT EXISTS document_segments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            document_id INTEGER NOT NULL,
+            segment_type TEXT DEFAULT 'paragraph',
+            segment_number INTEGER,
+            title TEXT,
+            content TEXT NOT NULL,
+            page_number INTEGER,
+            word_count INTEGER,
+            key_terms TEXT DEFAULT '[]',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (document_id) REFERENCES philosophy_documents(id) ON DELETE CASCADE
+        )''')
+        
+        conn.commit()
+    
+    def save_document_segments(self, document_id: int, segments: List[Dict]):
+        """Save document segments for intelligent search"""
+        conn = self.get_connection()
+        c = conn.cursor()
+        
+        for segment in segments:
+            c.execute("""
+                INSERT INTO document_segments 
+                (document_id, segment_type, segment_number, title, content, page_number, word_count, key_terms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                document_id,
+                segment.get('type', 'paragraph'),
+                segment.get('number', 0),
+                segment.get('title', ''),
+                segment['content'],
+                segment.get('page', 0),
+                segment.get('word_count', 0),
+                json.dumps(segment.get('key_terms', []))
+            ))
+        
+        conn.commit()
+    
+    def get_document_segments(self, document_id: int, segment_type: str = None) -> List[Dict]:
+        """Get all segments for a document"""
+        c = self.get_connection().cursor()
+        
+        query = "SELECT * FROM document_segments WHERE document_id = ?"
+        params = [document_id]
+        
+        if segment_type:
+            query += " AND segment_type = ?"
+            params.append(segment_type)
+        
+        query += " ORDER BY segment_number ASC"
+        
+        c.execute(query, params)
+        segments = [dict(row) for row in c.fetchall()]
+        
+        for segment in segments:
+            if segment.get('key_terms'):
+                try:
+                    segment['key_terms'] = json.loads(segment['key_terms'])
+                except:
+                    segment['key_terms'] = []
+        
+        return segments
+    
+    def search_documents(self, query: str, document_id: int = None) -> List[Dict]:
+        """Search through document content"""
+        c = self.get_connection().cursor()
+        
+        search_query = """
+            SELECT ds.*, pd.filename 
+            FROM document_segments ds
+            JOIN philosophy_documents pd ON ds.document_id = pd.id
+            WHERE ds.content LIKE ?
+        """
+        params = [f"%{query}%"]
+        
+        if document_id:
+            search_query += " AND ds.document_id = ?"
+            params.append(document_id)
+        
+        search_query += " ORDER BY ds.document_id, ds.segment_number LIMIT 50"
+        
+        c.execute(search_query, params)
+        return [dict(row) for row in c.fetchall()]
     
     def close(self):
         if self.conn:
