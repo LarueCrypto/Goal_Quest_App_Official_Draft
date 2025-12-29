@@ -1,3 +1,5 @@
+# Add this import at the top
+from character_visuals import get_character_svg, get_stat_visual_bars, get_level_up_animation, get_equipment_display
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, date
@@ -342,8 +344,60 @@ else:
     current_page = st.session_state.page
 
     # ===== DASHBOARD PAGE =====
+    # ===== DASHBOARD PAGE ===== (ENHANCED WITH CHARACTER)
     if current_page == "Dashboard":
-        st.title("🏠 Hunter's Dashboard")
+        st.title("🏠 Hunter's Command Center")
+        
+        # CHARACTER DISPLAY - Main feature!
+        col_char, col_stats = st.columns([1, 1])
+        
+        with col_char:
+            st.markdown("### 👤 Your Hunter")
+            
+            # Get equipped items
+            equipped = db.get_equipped_items()
+            
+            # Generate and display character SVG
+            character_svg = get_character_svg(profile, stats, equipped)
+            st.markdown(character_svg, unsafe_allow_html=True)
+            
+            # Character info
+            st.markdown(f"""
+            <div style='text-align: center; margin-top: 20px;'>
+                <h3 style='color: #d4af37;'>{profile.get('display_name', 'Hunter')}</h3>
+                <p style='color: #ffffff;'>{profile.get('avatar_style', 'warrior').capitalize()} • Level {stats.get('level', 1)}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_stats:
+            st.markdown("### 📊 Power Levels")
+            
+            # Animated stat bars
+            stat_bars_html = get_stat_visual_bars(stats)
+            st.markdown(stat_bars_html, unsafe_allow_html=True)
+            
+            # Quick stats
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("⚡ Total XP", format_xp(stats.get('total_xp', 0)))
+                st.metric("💰 Gold", f"{stats.get('current_gold', 0):,}")
+            with col2:
+                habits = db.get_habits()
+                max_streak = 0
+                if habits:
+                    for habit in habits:
+                        completions = db.get_completions(habit['id'])
+                        streak = calculate_streak(completions)
+                        max_streak = max(max_streak, streak)
+                st.metric("🔥 Best Streak", max_streak)
+                
+                today = get_cst_date()
+                completed_today = sum(1 for h in habits if db.is_completed(h['id'], today))
+                st.metric("✅ Today", f"{completed_today}/{len(habits) if habits else 0}")
+        
+        st.markdown("---")
+        
+        # Rest of dashboard code continues...
         
         # Top Metrics Row
         col1, col2, col3, col4 = st.columns(4)
