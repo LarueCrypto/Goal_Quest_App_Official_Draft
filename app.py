@@ -1318,14 +1318,15 @@ Be encouraging, specific, and actionable. Use {user_name}'s name."""
                 else:
                     st.info("Add API key for progress analysis!")
 
-    # ===== PHILOSOPHY LIBRARY PAGE =====
+    # ===== PHILOSOPHY LIBRARY PAGE (ENHANCED) =====
     elif current_page == "Library":
         user_name = profile.get('display_name', 'Hunter')
         
         st.title(f"📚 {user_name}'s Philosophy Library")
-        st.markdown(f"Upload wisdom texts, philosophical works, and personal documents. AI Coach will use these to provide personalized guidance, {user_name}.")
+        st.markdown(f"Your personal wisdom collection with AI-powered search and analysis.")
         
-        st.markdown("---")
+        # Library tabs
+        lib_tabs = st.tabs(["📚 Library", "🔍 AI Search", "📖 View & Analyze", "📤 Upload"])
         
         # Upload Section
         with st.expander("📤 Upload New Document", expanded=True):
