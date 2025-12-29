@@ -21,7 +21,7 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
     
     # Safely get equipment IDs (handle None and missing keys)
     weapon_id = equipped.get('weapon_id', '') if equipped else ''
-    armor_id = equipped.get('armor_id', '') if equipped else ''
+    armor_id = equipped.get('armor_id' or "") if equipped else ''
     ring_id = equipped.get('ring_id', '') if equipped else ''
     amulet_id = equipped.get('amulet_id', '') if equipped else ''
     
