@@ -1318,6 +1318,295 @@ Be encouraging, specific, and actionable. Use {user_name}'s name."""
                 else:
                     st.info("Add API key for progress analysis!")
 
+    # ===== PHILOSOPHY LIBRARY PAGE =====
+    elif current_page == "Library":
+        user_name = profile.get('display_name', 'Hunter')
+        
+        st.title(f"📚 {user_name}'s Philosophy Library")
+        st.markdown(f"Upload wisdom texts, philosophical works, and personal documents. AI Coach will use these to provide personalized guidance, {user_name}.")
+        
+        st.markdown("---")
+        
+        # Upload Section
+        with st.expander("📤 Upload New Document", expanded=True):
+            st.markdown("### Upload Philosophy Document")
+            st.caption("Supported: PDF files up to 999MB")
+            
+            uploaded_file = st.file_uploader(
+                "Choose a PDF file",
+                type=['pdf'],
+                help="Upload philosophical texts, wisdom literature, journals, or any document you want AI to reference"
+            )
+            
+            if uploaded_file is not None:
+                file_size = uploaded_file.size
+                file_size_mb = file_size / (1024 * 1024)
+                
+                st.info(f"📄 **{uploaded_file.name}** ({file_size_mb:.2f} MB)")
+                
+                if file_size_mb > 999:
+                    st.error(f"⚠️ File too large! Maximum size is 999MB. Your file is {file_size_mb:.2f}MB")
+                else:
+                    if st.button(f"📥 Process and Add to {user_name}'s Library", use_container_width=True):
+                        with st.spinner(f"🤖 Processing document for {user_name}..."):
+                            try:
+                                # Extract PDF text
+                                import PyPDF2
+                                import io
+                                
+                                pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
+                                
+                                # Extract all text
+                                text_content = ""
+                                for page_num in range(len(pdf_reader.pages)):
+                                    page = pdf_reader.pages[page_num]
+                                    text_content += page.extract_text() + "\n\n"
+                                
+                                if text_content.strip():
+                                    # Save to database
+                                    doc_id = db.upload_document(
+                                        filename=uploaded_file.name,
+                                        content=text_content,
+                                        file_type='pdf',
+                                        file_size=file_size
+                                    )
+                                    
+                                    # AI Analysis
+                                    if ai_coach.client:
+                                        with st.spinner("🤖 AI is analyzing the content..."):
+                                            analysis = ai_coach.analyze_pdf_content(text_content, uploaded_file.name)
+                                            
+                                            db.update_document(
+                                                doc_id,
+                                                ai_summary=analysis['summary'],
+                                                key_concepts=analysis['key_concepts']
+                                            )
+                                            
+                                            st.success(f"✨ Document added to {user_name}'s library and analyzed!")
+                                            
+                                            # Show analysis
+                                            st.markdown("### 🤖 AI Analysis")
+                                            st.markdown(f"**Summary:**\n{analysis['summary']}")
+                                            
+                                            st.markdown("**Key Concepts:**")
+                                            for concept in analysis['key_concepts'][:15]:
+                                                st.markdown(f"• {concept}")
+                                            
+                                            if analysis['themes']:
+                                                st.markdown("**Themes:**")
+                                                for theme in analysis['themes']:
+                                                    st.markdown(f"• {theme}")
+                                    else:
+                                        st.success(f"✅ Document added to {user_name}'s library!")
+                                        st.info("💡 Add an Anthropic API key to get AI analysis of your documents")
+                                    
+                                    # Achievement
+                                    db.unlock_achievement("philosophy_upload")
+                                    
+                                    docs = db.get_documents()
+                                    if len(docs) >= 5:
+                                        db.unlock_achievement("philosophy_5")
+                                    
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Could not extract text from PDF. Make sure it's not a scanned image.")
+                                
+                            except Exception as e:
+                                st.error(f"Error processing PDF: {e}")
+                                st.info("💡 Make sure the PDF contains readable text (not just images)")
+        
+        st.markdown("---")
+        
+        # Library Display
+        st.markdown(f"### 📚 {user_name}'s Library Collection")
+        
+        documents = db.get_documents()
+        
+        if documents:
+            st.markdown(f"**{len(documents)} documents in library** • Total wisdom accessible to AI Coach")
+            
+            # Stats
+            total_size = sum(doc['file_size'] for doc in documents)
+            total_size_mb = total_size / (1024 * 1024)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📚 Documents", len(documents))
+            with col2:
+                st.metric("💾 Total Size", f"{total_size_mb:.1f} MB")
+            with col3:
+                analyzed = sum(1 for doc in documents if doc.get('ai_summary'))
+                st.metric("🤖 AI Analyzed", analyzed)
+            
+            st.markdown("---")
+            
+            # Display each document
+            for doc in documents:
+                with st.expander(f"📄 {doc['filename']}", expanded=False):
+                    # Document info
+                    doc_size_mb = doc['file_size'] / (1024 * 1024)
+                    uploaded_date = doc.get('uploaded_at', 'Unknown')
+                    
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.caption(f"📅 Uploaded: {uploaded_date[:16] if uploaded_date else 'Unknown'}")
+                        st.caption(f"💾 Size: {doc_size_mb:.2f} MB")
+                        
+                        # AI Summary
+                        if doc.get('ai_summary'):
+                            st.markdown("#### 🤖 AI Summary")
+                            st.info(doc['ai_summary'])
+                        
+                        # Key Concepts
+                        if doc.get('key_concepts'):
+                            concepts = doc['key_concepts']
+                            if isinstance(concepts, str):
+                                try:
+                                    import json
+                                    concepts = json.loads(concepts)
+                                except:
+                                    concepts = []
+                            
+                            if concepts:
+                                st.markdown("#### 💡 Key Concepts")
+                                
+                                # Show in columns
+                                concept_cols = st.columns(2)
+                                for idx, concept in enumerate(concepts[:20]):
+                                    with concept_cols[idx % 2]:
+                                        st.markdown(f"• {concept}")
+                        
+                        # Content preview
+                        if doc.get('content'):
+                            st.markdown("#### 📖 Content Preview")
+                            preview = doc['content'][:1000]
+                            st.text_area(
+                                "First 1000 characters",
+                                value=preview + "..." if len(doc['content']) > 1000 else preview,
+                                height=150,
+                                disabled=True,
+                                key=f"preview_{doc['id']}"
+                            )
+                    
+                    with col2:
+                        # Actions
+                        st.markdown("#### Actions")
+                        
+                        # Re-analyze button
+                        if ai_coach.client:
+                            if st.button("🔄 Re-analyze", key=f"reanalyze_{doc['id']}"):
+                                with st.spinner("🤖 Re-analyzing..."):
+                                    analysis = ai_coach.analyze_pdf_content(
+                                        doc.get('content', ''),
+                                        doc['filename']
+                                    )
+                                    
+                                    db.update_document(
+                                        doc['id'],
+                                        ai_summary=analysis['summary'],
+                                        key_concepts=analysis['key_concepts']
+                                    )
+                                    
+                                    st.success("✅ Re-analyzed!")
+                                    st.rerun()
+                        
+                        # Delete button
+                        if st.button("🗑️ Delete", key=f"delete_{doc['id']}", type="secondary"):
+                            st.session_state[f'confirm_delete_doc_{doc["id"]}'] = True
+                        
+                        # Confirm delete
+                        if st.session_state.get(f'confirm_delete_doc_{doc["id"]}'):
+                            st.warning("⚠️ Confirm delete?")
+                            
+                            col_yes, col_no = st.columns(2)
+                            with col_yes:
+                                if st.button("✅ Yes", key=f"confirm_yes_{doc['id']}"):
+                                    # Delete document
+                                    conn = db.get_connection()
+                                    c = conn.cursor()
+                                    c.execute("DELETE FROM philosophy_documents WHERE id = ?", (doc['id'],))
+                                    conn.commit()
+                                    
+                                    st.success(f"🗑️ Deleted: {doc['filename']}")
+                                    del st.session_state[f'confirm_delete_doc_{doc["id"]}']
+                                    st.rerun()
+                            
+                            with col_no:
+                                if st.button("❌ No", key=f"confirm_no_{doc['id']}"):
+                                    del st.session_state[f'confirm_delete_doc_{doc["id"]}']
+                                    st.rerun()
+        
+        else:
+            st.info(f"📚 {user_name}'s library is empty. Upload your first document to begin building your wisdom collection!")
+            
+            st.markdown("### 💡 Recommended Documents")
+            st.markdown("""
+            **Philosophy & Wisdom:**
+            - The Tao Te Ching
+            - Meditations by Marcus Aurelius
+            - The Bhagavad Gita
+            - Hagakure (The Book of the Samurai)
+            - The Kybalion
+            - Works by Rumi, Hafiz, or other mystics
+            
+            **Personal Development:**
+            - Your personal journal entries
+            - Course notes and learning materials
+            - Book summaries and insights
+            - Goal planning documents
+            
+            **AI Coach Benefits:**
+            - Personalized guidance based on YOUR philosophy
+            - Context-aware habit and goal suggestions
+            - Wisdom-backed coaching responses
+            - Progressive recommendations aligned with your values
+            """)
+        
+        st.markdown("---")
+        
+        # Library Settings
+        with st.expander("⚙️ Library Settings"):
+            st.markdown("### Library Configuration")
+            
+            st.markdown(f"**How {user_name}'s library powers AI Coach:**")
+            st.markdown("""
+            - 🤖 **Personalized Coaching**: AI references your uploaded wisdom when answering questions
+            - 🎯 **Goal Planning**: Action steps and habits aligned with your philosophy
+            - ⚡ **Habit Design**: Suggestions grounded in teachings you value
+            - 📈 **Progress Analysis**: Insights filtered through your worldview
+            - 💬 **Daily Quotes**: Can be enhanced with concepts from your library
+            """)
+            
+            st.markdown("---")
+            
+            # Clear all documents option
+            if documents:
+                st.warning("⚠️ **Danger Zone**")
+                
+                if st.button("🗑️ Clear Entire Library", type="secondary"):
+                    st.session_state['confirm_clear_library'] = True
+                
+                if st.session_state.get('confirm_clear_library'):
+                    st.error(f"⚠️ This will delete ALL {len(documents)} documents from {user_name}'s library. This cannot be undone!")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✅ Yes, Delete All", key="confirm_clear_lib_yes"):
+                            conn = db.get_connection()
+                            c = conn.cursor()
+                            c.execute("DELETE FROM philosophy_documents")
+                            conn.commit()
+                            
+                            st.success("🗑️ Library cleared!")
+                            del st.session_state['confirm_clear_library']
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button("❌ Cancel", key="confirm_clear_lib_no"):
+                            del st.session_state['confirm_clear_library']
+                            st.rerun()
+
     # ===== SHOP PAGE =====
     elif current_page == "Shop":
         st.title("🛒 Shadow Monarch's Shop")
