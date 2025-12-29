@@ -983,41 +983,18 @@ else:
         with tab1:
             st.markdown("### ⚔️ Current Loadout")
             
+            # Get equipped items and inventory
             equipped = db.get_equipped_items()
+            inventory = db.get_inventory()
             
-            # Display equipment slots
-            slots = {
-                "weapon": {"icon": "⚔️", "name": "Weapon"},
-                "armor": {"icon": "🛡️", "name": "Armor"},
-                "ring": {"icon": "💍", "name": "Ring"},
-                "amulet": {"icon": "📿", "name": "Amulet"}
-            }
-            
-            cols = st.columns(2)
-            for i, (slot, info) in enumerate(slots.items()):
-                with cols[i % 2]:
-                    equipped_id = equipped.get(f"{slot}_id")
-                    
-                    if equipped_id:
-                        item = get_item_by_id(equipped_id)
-                        if item:
-                            st.markdown(f"""
-                            <div class='stat-display'>
-                                <h4>{info['icon']} {info['name']}</h4>
-                                <p style='color: #d4af37;'>{item['name']}</p>
-                                <p style='font-size: 0.9em;'>{item.get('rarity', 'common').upper()}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"**{info['icon']} {info['name']}:** Empty")
-                    else:
-                        st.markdown(f"**{info['icon']} {info['name']}:** Empty")
+            # Visual equipment display with 3D effects
+            equipment_html = get_equipment_display(equipped, inventory)
+            st.markdown(equipment_html, unsafe_allow_html=True)
             
             st.markdown("---")
             
             # Equip Items Section
             st.markdown("### 🎒 Available Equipment")
-            inventory = db.get_inventory()
             equipment_items = [item for item in inventory if get_item_by_id(item['item_id']) and get_item_by_id(item['item_id']).get('category') == 'equipment']
             
             if equipment_items:
@@ -1029,11 +1006,16 @@ else:
                         with col1:
                             st.markdown(f"**{item['icon']} {item['name']}**")
                             st.caption(f"{item.get('slot', 'misc').capitalize()} • {item['description']}")
+                            
+                            # Show stats if available
+                            if item.get('stats'):
+                                stat_text = ", ".join([f"+{v} {k.capitalize()}" for k, v in item['stats'].items()])
+                                st.caption(f"📊 {stat_text}")
                         
                         with col2:
-                            if st.button("Equip", key=f"equip_{item['id']}"):
+                            if st.button("⚔️ Equip", key=f"equip_{item['id']}"):
                                 db.equip_item(item['id'], item.get('slot', 'misc'))
-                                st.success(f"Equipped {item['name']}!")
+                                st.success(f"✨ Equipped {item['name']}!")
                                 st.rerun()
             else:
                 st.info("🛒 Visit the shop to purchase equipment!")
