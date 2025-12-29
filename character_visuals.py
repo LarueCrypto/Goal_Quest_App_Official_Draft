@@ -15,8 +15,21 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
     - Monarch (Lv 76-100): Ultimate transcendent form
     """
     
-    level = stats.get('level', 1)
-    avatar_style = profile.get('avatar_style', 'warrior')
+    # Safely get values with defaults
+    level = stats.get('level', 1) if stats else 1
+    avatar_style = profile.get('avatar_style', 'warrior') if profile else 'warrior'
+    
+    # Safely get equipment IDs (handle None and missing keys)
+    weapon_id = equipped.get('weapon_id', '') if equipped else ''
+    armor_id = equipped.get('armor_id', '') if equipped else ''
+    ring_id = equipped.get('ring_id', '') if equipped else ''
+    amulet_id = equipped.get('amulet_id', '') if equipped else ''
+    
+    # Ensure they're strings
+    weapon_id = weapon_id or ''
+    armor_id = armor_id or ''
+    ring_id = ring_id or ''
+    amulet_id = amulet_id or ''
     
     # Determine evolution stage
     if level >= 76:
@@ -45,63 +58,67 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
         base_glow = "rgba(212, 175, 55, 0.2)"
         size_multiplier = 1.0
     
-    # Stat-based visual modifiers
-    strength = stats.get('strength', 0)
-    intelligence = stats.get('intelligence', 0)
-    vitality = stats.get('vitality', 0)
-    willpower = stats.get('willpower', 0)
+    # Stat-based visual modifiers (safely get with defaults)
+    strength = stats.get('strength', 0) if stats else 0
+    intelligence = stats.get('intelligence', 0) if stats else 0
+    vitality = stats.get('vitality', 0) if stats else 0
+    willpower = stats.get('willpower', 0) if stats else 0
+    sense = stats.get('sense', 0) if stats else 0
     
     # Calculate visual properties
-    character_height = 180 + (strength * 0.5)  # Strength increases size
-    muscle_definition = min(100, strength * 2)  # Muscle visibility
-    aura_intensity = min(100, willpower * 1.5)  # Willpower = aura strength
-    glow_radius = 10 + (intelligence * 0.3)  # Intelligence = magical glow
-    health_pulse = 0.5 + (vitality * 0.01)  # Vitality = health pulse speed
+    character_height = 180 + (strength * 0.5)
+    muscle_definition = min(100, strength * 2)
+    aura_intensity = min(100, willpower * 1.5)
+    glow_radius = 10 + (intelligence * 0.3)
+    health_pulse = 0.5 + (vitality * 0.01)
     
     # Avatar style base colors
     style_colors = {
         'warrior': {
-            'primary': '#8B0000',  # Dark red
-            'secondary': '#FFD700',  # Gold
-            'accent': '#C0C0C0',  # Silver
+            'primary': '#8B0000',
+            'secondary': '#FFD700',
+            'accent': '#C0C0C0',
             'weapon': '⚔️'
         },
         'mage': {
-            'primary': '#4B0082',  # Indigo
-            'secondary': '#9370DB',  # Medium purple
-            'accent': '#00FFFF',  # Cyan
+            'primary': '#4B0082',
+            'secondary': '#9370DB',
+            'accent': '#00FFFF',
             'weapon': '🔮'
         },
         'rogue': {
-            'primary': '#2F4F4F',  # Dark slate gray
-            'secondary': '#696969',  # Dim gray
-            'accent': '#00FF00',  # Lime
+            'primary': '#2F4F4F',
+            'secondary': '#696969',
+            'accent': '#00FF00',
             'weapon': '🗡️'
         },
         'sage': {
-            'primary': '#DAA520',  # Goldenrod
-            'secondary': '#F0E68C',  # Khaki
-            'accent': '#FFFFFF',  # White
+            'primary': '#DAA520',
+            'secondary': '#F0E68C',
+            'accent': '#FFFFFF',
             'weapon': '📿'
         }
     }
     
     colors = style_colors.get(avatar_style, style_colors['warrior'])
     
-    # Equipment effects
+    # Equipment effects (safely check for equipment)
     weapon_glow = "none"
     armor_aura = "none"
     has_legendary_item = False
     
-    if equipped.get('weapon_id'):
+    if weapon_id:
         weapon_glow = f"drop-shadow(0 0 10px {colors['accent']})"
-        if 'legendary' in equipped.get('weapon_id', ''):
+        if 'legendary' in weapon_id.lower() or 'demon' in weapon_id.lower():
             has_legendary_item = True
     
-    if equipped.get('armor_id'):
+    if armor_id:
         armor_aura = f"drop-shadow(0 0 15px {colors['primary']})"
-        if 'shadow' in equipped.get('armor_id', ''):
+        if 'shadow' in armor_id.lower() or 'monarch' in armor_id.lower():
             has_legendary_item = True
+    
+    # Check for shadow armor specifically
+    has_shadow_armor = 'shadow' in armor_id.lower()
     
     # Generate SVG
     svg = f"""
@@ -162,7 +179,7 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
         </defs>
         
         <!-- Background Power Aura (scales with willpower) -->
-        <circle cx="200" cy="250" r="{100 + aura_intensity}" fill="url(#auraGradient)" opacity="{aura_intensity/100}">
+        <circle cx="200" cy="250" r="{100 + aura_intensity}" fill="url(#auraGradient)" opacity="{aura_intensity/100 if aura_intensity > 0 else 0.2}">
             <animateTransform
                 attributeName="transform"
                 attributeType="XML"
@@ -192,7 +209,7 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
             <!-- Shadow (if has shadow armor) -->
             {f'''<ellipse cx="0" cy="80" rx="60" ry="20" fill="#000000" opacity="0.5">
                 <animate attributeName="rx" values="60;70;60" dur="2s" repeatCount="indefinite"/>
-            </ellipse>''' if 'shadow' in equipped.get('armor_id', '') else ''}
+            </ellipse>''' if has_shadow_armor else ''}
             
             <!-- Body -->
             <ellipse cx="0" cy="0" rx="40" ry="60" fill="{colors['primary']}" 
@@ -222,7 +239,7 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
             <!-- Third Eye (unlocked at high sense) -->
             {f'''<circle cx="0" cy="-75" r="4" fill="#9370DB" filter="url(#glow)">
                 <animate attributeName="opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite"/>
-            </circle>''' if stats.get('sense', 0) > 50 else ''}
+            </circle>''' if sense > 50 else ''}
             
             <!-- Arms -->
             <rect x="-50" y="-20" width="15" height="50" rx="5" fill="{colors['primary']}" 
@@ -249,7 +266,7 @@ def get_character_svg(profile: dict, stats: dict, equipped: dict, active_effects
                          fill="#FFD700" 
                          stroke="#FFF" 
                          stroke-width="1"/>
-            </g>''' if equipped.get('weapon_id') else ''}
+            </g>''' if weapon_id else ''}
             
             <!-- Willpower Inner Fire (unlocked at high willpower) -->
             {f'''<g opacity="{min(1, willpower/50)}">
@@ -329,9 +346,9 @@ def get_stat_visual_bars(stats: dict) -> str:
     html = "<div style='background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 20px; border-radius: 15px; border: 2px solid #d4af37; margin: 20px 0;'>"
     
     for stat, config in stat_config.items():
-        value = stats.get(stat, 0)
-        max_value = 100  # Display cap
-        percentage = min(100, (value / max_value) * 100)
+        value = stats.get(stat, 0) if stats else 0
+        max_value = 100
+        percentage = min(100, (value / max_value) * 100) if max_value > 0 else 0
         
         html += f"""
         <div style='margin: 15px 0;'>
@@ -474,6 +491,9 @@ def get_level_up_animation() -> str:
 def get_equipment_display(equipped: dict, inventory: list) -> str:
     """Visual display of equipped items with 3D effect"""
     
+    # Safely handle equipped dict
+    equipped = equipped or {}
+    
     html = """
     <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;'>
     """
@@ -486,10 +506,10 @@ def get_equipment_display(equipped: dict, inventory: list) -> str:
     }
     
     for slot, config in slots.items():
-        item_id = equipped.get(f"{slot}_id")
+        item_id = equipped.get(f"{slot}_id", None)
+        item_id = item_id or ''  # Convert None to empty string
         
         if item_id:
-            # Find item details from inventory
             item_name = item_id.replace('_', ' ').title()
             equipped_html = f"""
             <div style='
