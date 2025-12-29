@@ -47,6 +47,7 @@ class Database:
             category TEXT NOT NULL,
             difficulty INTEGER NOT NULL DEFAULT 1,
             xp_reward INTEGER NOT NULL DEFAULT 50,
+            gold_reward INTEGER NOT NULL DEFAULT 10,
             difficulty_rationale TEXT,
             priority BOOLEAN DEFAULT 0,
             color TEXT NOT NULL DEFAULT 'bg-blue-500',
@@ -69,13 +70,18 @@ class Database:
             progress INTEGER DEFAULT 0,
             difficulty INTEGER NOT NULL DEFAULT 1,
             xp_reward INTEGER NOT NULL DEFAULT 1000,
+            gold_reward INTEGER NOT NULL DEFAULT 200,
             completed BOOLEAN DEFAULT 0,
             priority BOOLEAN DEFAULT 0,
             steps TEXT DEFAULT '[]',
+            ai_generated_steps TEXT DEFAULT '[]',
+            habit_suggestions TEXT DEFAULT '[]',
             reminder_enabled BOOLEAN DEFAULT 0,
             reminder_days_before INTEGER DEFAULT 1,
             parent_goal_id INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            progressive_suggestions TEXT DEFAULT '[]',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
         )''')
         
         # Habit Completions
@@ -87,7 +93,7 @@ class Database:
             UNIQUE(habit_id, date)
         )''')
         
-        # User Stats (WITH GOLD!)
+        # User Stats (100 LEVELS!)
         c.execute('''CREATE TABLE IF NOT EXISTS user_stats (
             id INTEGER PRIMARY KEY,
             level INTEGER DEFAULT 1,
@@ -128,7 +134,7 @@ class Database:
             category TEXT DEFAULT 'general',
             tier TEXT DEFAULT 'bronze',
             xp_reward INTEGER DEFAULT 50,
-            gold_reward INTEGER DEFAULT 0,
+            gold_reward INTEGER DEFAULT 10,
             stat_bonus TEXT,
             special_power TEXT,
             unlocked_at TIMESTAMP
@@ -145,7 +151,7 @@ class Database:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
         
-        # Inventory (SHOP SYSTEM!)
+        # Inventory
         c.execute('''CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_id TEXT NOT NULL,
@@ -154,7 +160,7 @@ class Database:
             purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
         
-        # Active Effects (CONSUMABLES!)
+        # Active Effects
         c.execute('''CREATE TABLE IF NOT EXISTS active_effects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             effect_type TEXT NOT NULL,
@@ -174,6 +180,18 @@ class Database:
             head_id TEXT
         )''')
         
+        # Philosophy Library (NEW!)
+        c.execute('''CREATE TABLE IF NOT EXISTS philosophy_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            content TEXT,
+            file_type TEXT,
+            file_size INTEGER,
+            ai_summary TEXT,
+            key_concepts TEXT DEFAULT '[]',
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        
         conn.commit()
         self.init_defaults()
     
@@ -181,17 +199,14 @@ class Database:
         conn = self.get_connection()
         c = conn.cursor()
         
-        # Initialize user profile if not exists
         c.execute("SELECT COUNT(*) FROM user_profile")
         if c.fetchone()[0] == 0:
             c.execute("INSERT INTO user_profile (id) VALUES (1)")
         
-        # Initialize user stats if not exists
         c.execute("SELECT COUNT(*) FROM user_stats")
         if c.fetchone()[0] == 0:
-            c.execute("INSERT INTO user_stats (id, current_gold) VALUES (1, 1000)")  # Start with 1000 gold
+            c.execute("INSERT INTO user_stats (id, current_gold) VALUES (1, 5000)")  # Start with 5000 gold!
         
-        # Initialize equipment if not exists
         c.execute("SELECT COUNT(*) FROM equipment")
         if c.fetchone()[0] == 0:
             c.execute("INSERT INTO equipment (id) VALUES (1)")
@@ -205,7 +220,6 @@ class Database:
         row = c.fetchone()
         if row:
             profile = dict(row)
-            # Parse JSON fields
             for field in ['philosophy_traditions', 'focus_areas', 'challenge_approaches']:
                 if profile.get(field):
                     try:
@@ -231,10 +245,14 @@ class Database:
         c.execute(query, values)
         conn.commit()
     
-    # ===== HABITS ===== (same as before, keeping existing code)
+    # ===== HABITS =====
     def create_habit(self, name: str, category: str, description: str = "", **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
+        
+        # Enhanced gold rewards (30% of XP as gold)
+        if 'xp_reward' in kwargs and 'gold_reward' not in kwargs:
+            kwargs['gold_reward'] = int(kwargs['xp_reward'] * 0.3)
         
         if 'frequency_days' in kwargs and isinstance(kwargs['frequency_days'], list):
             kwargs['frequency_days'] = json.dumps(kwargs['frequency_days'])
@@ -303,15 +321,14 @@ class Database:
                 VALUES (?, ?, 1)
             """, (habit_id, date_str))
             
-            # Get XP reward and add it
-            c.execute("SELECT xp_reward FROM habits WHERE id = ?", (habit_id,))
+            # Get rewards
+            c.execute("SELECT xp_reward, gold_reward FROM habits WHERE id = ?", (habit_id,))
             row = c.fetchone()
             if row:
                 xp_reward = row[0]
-                # Award XP
+                gold_reward = row[1]
                 self.add_xp(xp_reward)
-                # Award gold (10% of XP as gold)
-                self.add_gold(int(xp_reward * 0.1))
+                self.add_gold(gold_reward)
         else:
             c.execute("DELETE FROM completions WHERE habit_id = ? AND date = ?", (habit_id, date_str))
         
@@ -338,13 +355,23 @@ class Database:
         row = c.fetchone()
         return bool(row and row[0]) if row else False
     
-    # ===== GOALS ===== (keeping existing code)
+    # ===== GOALS =====
     def create_goal(self, title: str, **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
         
+        # Enhanced gold rewards (25% of XP as gold)
+        if 'xp_reward' in kwargs and 'gold_reward' not in kwargs:
+            kwargs['gold_reward'] = int(kwargs['xp_reward'] * 0.25)
+        
         if 'steps' in kwargs and isinstance(kwargs['steps'], list):
             kwargs['steps'] = json.dumps(kwargs['steps'])
+        if 'ai_generated_steps' in kwargs and isinstance(kwargs['ai_generated_steps'], list):
+            kwargs['ai_generated_steps'] = json.dumps(kwargs['ai_generated_steps'])
+        if 'habit_suggestions' in kwargs and isinstance(kwargs['habit_suggestions'], list):
+            kwargs['habit_suggestions'] = json.dumps(kwargs['habit_suggestions'])
+        if 'progressive_suggestions' in kwargs and isinstance(kwargs['progressive_suggestions'], list):
+            kwargs['progressive_suggestions'] = json.dumps(kwargs['progressive_suggestions'])
         
         fields = ['title'] + list(kwargs.keys())
         values = [title] + list(kwargs.values())
@@ -366,11 +393,12 @@ class Database:
         goals = [dict(row) for row in c.fetchall()]
         
         for goal in goals:
-            if goal.get('steps'):
-                try:
-                    goal['steps'] = json.loads(goal['steps']) if isinstance(goal['steps'], str) else []
-                except:
-                    goal['steps'] = []
+            for field in ['steps', 'ai_generated_steps', 'habit_suggestions', 'progressive_suggestions']:
+                if goal.get(field):
+                    try:
+                        goal[field] = json.loads(goal[field]) if isinstance(goal[field], str) else []
+                    except:
+                        goal[field] = []
         
         return goals
     
@@ -378,16 +406,19 @@ class Database:
         conn = self.get_connection()
         c = conn.cursor()
         
-        if 'steps' in kwargs and isinstance(kwargs['steps'], list):
-            kwargs['steps'] = json.dumps(kwargs['steps'])
+        for field in ['steps', 'ai_generated_steps', 'habit_suggestions', 'progressive_suggestions']:
+            if field in kwargs and isinstance(kwargs[field], list):
+                kwargs[field] = json.dumps(kwargs[field])
         
-        # If marking as complete, award XP
-        if kwargs.get('completed'):
-            c.execute("SELECT xp_reward, completed FROM goals WHERE id = ?", (goal_id,))
+        # If marking as complete
+        if kwargs.get('completed') and not kwargs.get('completed_at'):
+            kwargs['completed_at'] = datetime.now().isoformat()
+            
+            c.execute("SELECT xp_reward, gold_reward, completed FROM goals WHERE id = ?", (goal_id,))
             row = c.fetchone()
-            if row and not row[1]:  # If not already completed
+            if row and not row[2]:
                 self.add_xp(row[0])
-                self.add_gold(int(row[0] * 0.2))  # 20% of XP as gold for goals
+                self.add_gold(row[1])
         
         fields = []
         values = []
@@ -406,7 +437,22 @@ class Database:
         c.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
         conn.commit()
     
-    # ===== USER STATS =====
+    def get_goal_by_id(self, goal_id: int) -> Optional[Dict]:
+        c = self.get_connection().cursor()
+        c.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        row = c.fetchone()
+        if row:
+            goal = dict(row)
+            for field in ['steps', 'ai_generated_steps', 'habit_suggestions', 'progressive_suggestions']:
+                if goal.get(field):
+                    try:
+                        goal[field] = json.loads(goal[field]) if isinstance(goal[field], str) else []
+                    except:
+                        goal[field] = []
+            return goal
+        return None
+    
+    # ===== USER STATS (100 LEVELS!) =====
     def get_stats(self) -> Dict:
         c = self.get_connection().cursor()
         c.execute("SELECT * FROM user_stats WHERE id = 1")
@@ -414,7 +460,7 @@ class Database:
         return dict(row) if row else {}
     
     def add_xp(self, amount: int):
-        """Add XP and handle leveling up"""
+        """Add XP and handle leveling up (UP TO LEVEL 100!)"""
         conn = self.get_connection()
         c = conn.cursor()
         
@@ -426,9 +472,9 @@ class Database:
             new_current = current_xp + amount
             new_total = total_xp + amount
             
-            # Level up logic: level N requires N * 500 XP
+            # Level up logic: level N requires N * 500 XP (up to level 100!)
             new_level = level
-            while new_current >= new_level * 500:
+            while new_current >= new_level * 500 and new_level < 100:
                 new_current -= new_level * 500
                 new_level += 1
             
@@ -440,7 +486,7 @@ class Database:
             """, (new_level, new_current, new_total, new_level, level))
             
             conn.commit()
-            return new_level > level  # Return True if leveled up
+            return new_level > level
         
         return False
     
@@ -482,44 +528,37 @@ class Database:
     
     # ===== INVENTORY & SHOP =====
     def add_to_inventory(self, item_id: str, quantity: int = 1):
-        """Add item to inventory"""
         conn = self.get_connection()
         c = conn.cursor()
         
-        # Check if item already exists
         c.execute("SELECT id, quantity FROM inventory WHERE item_id = ?", (item_id,))
         row = c.fetchone()
         
         if row:
-            # Update quantity
             c.execute("UPDATE inventory SET quantity = quantity + ? WHERE item_id = ?", (quantity, item_id))
         else:
-            # Insert new
             c.execute("INSERT INTO inventory (item_id, quantity) VALUES (?, ?)", (item_id, quantity))
         
         conn.commit()
     
     def get_inventory(self) -> List[Dict]:
-        """Get all inventory items"""
         c = self.get_connection().cursor()
         c.execute("SELECT * FROM inventory ORDER BY purchased_at DESC")
         return [dict(row) for row in c.fetchall()]
     
     def get_equipped_items(self) -> Dict:
-        """Get currently equipped items"""
         c = self.get_connection().cursor()
         c.execute("SELECT * FROM equipment WHERE id = 1")
         row = c.fetchone()
         return dict(row) if row else {}
     
     def equip_item(self, item_id: str, slot: str):
-        """Equip an item to a slot"""
         conn = self.get_connection()
         c = conn.cursor()
         c.execute(f"UPDATE equipment SET {slot}_id = ? WHERE id = 1", (item_id,))
         conn.commit()
     
-    # ===== NOTES ===== (keeping existing code)
+    # ===== NOTES =====
     def create_note(self, title: str, content: str = "", **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
@@ -597,25 +636,21 @@ class Database:
         return achievements
     
     def unlock_achievement(self, key: str):
-        """Unlock an achievement and award rewards"""
         conn = self.get_connection()
         c = conn.cursor()
         
         c.execute("SELECT unlocked_at, xp_reward, gold_reward, stat_bonus FROM achievements WHERE key = ?", (key,))
         row = c.fetchone()
         
-        if row and not row[0]:  # Not yet unlocked
+        if row and not row[0]:
             c.execute("UPDATE achievements SET unlocked_at = CURRENT_TIMESTAMP WHERE key = ?", (key,))
             
-            # Award XP
             if row[1]:
                 self.add_xp(row[1])
             
-            # Award gold
             if row[2]:
                 self.add_gold(row[2])
             
-            # Award stat bonus
             if row[3]:
                 try:
                     bonus = json.loads(row[3])
@@ -645,6 +680,56 @@ class Database:
             VALUES (?, ?, ?, ?, ?)
         """, (date_str, quote, philosophy, tradition, habit_context))
         conn.commit()
+    
+    # ===== PHILOSOPHY LIBRARY =====
+    def upload_document(self, filename: str, content: str, file_type: str, file_size: int) -> int:
+        conn = self.get_connection()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO philosophy_documents (filename, content, file_type, file_size)
+            VALUES (?, ?, ?, ?)
+        """, (filename, content, file_type, file_size))
+        conn.commit()
+        return c.lastrowid
+    
+    def get_documents(self) -> List[Dict]:
+        c = self.get_connection().cursor()
+        c.execute("SELECT * FROM philosophy_documents ORDER BY uploaded_at DESC")
+        docs = [dict(row) for row in c.fetchall()]
+        
+        for doc in docs:
+            if doc.get('key_concepts'):
+                try:
+                    doc['key_concepts'] = json.loads(doc['key_concepts']) if isinstance(doc['key_concepts'], str) else []
+                except:
+                    doc['key_concepts'] = []
+        
+        return docs
+    
+    def update_document(self, doc_id: int, **kwargs):
+        conn = self.get_connection()
+        c = conn.cursor()
+        
+        if 'key_concepts' in kwargs and isinstance(kwargs['key_concepts'], list):
+            kwargs['key_concepts'] = json.dumps(kwargs['key_concepts'])
+        
+        fields = []
+        values = []
+        for key, value in kwargs.items():
+            fields.append(f"{key} = ?")
+            values.append(value)
+        
+        values.append(doc_id)
+        query = f"UPDATE philosophy_documents SET {', '.join(fields)} WHERE id = ?"
+        c.execute(query, values)
+        conn.commit()
+    
+    def get_all_document_content(self) -> str:
+        """Get all document content for AI context"""
+        c = self.get_connection().cursor()
+        c.execute("SELECT content FROM philosophy_documents WHERE content IS NOT NULL")
+        rows = c.fetchall()
+        return "\n\n---\n\n".join([row[0] for row in rows if row[0]])
     
     def close(self):
         if self.conn:
