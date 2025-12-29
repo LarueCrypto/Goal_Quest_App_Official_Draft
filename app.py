@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta, date
 from database import Database
 from achievements import initialize_achievements
@@ -19,31 +17,26 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    /* Main background */
     .main {
         background-color: #0a0a0a;
         color: #ffffff;
     }
     
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #1a1a1a;
     }
     
-    /* Headers */
     h1, h2, h3 {
         color: #d4af37;
         text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
     }
     
-    /* Metrics */
     [data-testid="stMetricValue"] {
         color: #d4af37;
         font-size: 2rem;
         font-weight: bold;
     }
     
-    /* Buttons */
     .stButton>button {
         background-color: #d4af37;
         color: #0a0a0a;
@@ -58,26 +51,12 @@ st.markdown("""
         box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
     }
     
-    /* Progress bars */
     .stProgress > div > div > div {
         background-color: #d4af37;
     }
     
-    /* Cards */
-    div[data-testid="stVerticalBlock"] > div {
-        background-color: #1a1a1a;
-        border-radius: 10px;
-        padding: 1rem;
-    }
-    
-    /* Text */
     p, span, label {
         color: #ffffff;
-    }
-    
-    /* Checkboxes */
-    .stCheckbox {
-        color: #d4af37;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -204,7 +183,6 @@ else:
             st.metric("Total XP", format_xp(stats.get('total_xp', 0)))
         
         with col3:
-            # Calculate daily streak
             habits = db.get_habits()
             max_streak = 0
             if habits:
@@ -215,7 +193,6 @@ else:
             st.metric("Daily Streak", max_streak, "🔥")
         
         with col4:
-            # Count habits completed today
             today = get_cst_date()
             completed_today = 0
             if habits:
@@ -232,7 +209,6 @@ else:
         motivation = db.get_daily_motivation(today)
         
         if not motivation:
-            # Generate new quote
             quote_data = ai_coach.generate_daily_quote(profile.get('philosophy_tradition', 'esoteric'))
             db.save_motivation(
                 today,
@@ -323,7 +299,6 @@ else:
                     submitted = st.form_submit_button("🎯 Create Habit")
                     
                     if submitted and name:
-                        # AI assess difficulty
                         assessment = ai_coach.assess_habit_difficulty(name, description, category)
                         
                         habit_id = db.create_habit(
@@ -337,7 +312,6 @@ else:
                             priority=priority
                         )
                         
-                        # Check achievement
                         habits = db.get_habits()
                         if len(habits) == 1:
                             db.unlock_achievement("first_habit")
@@ -370,7 +344,6 @@ else:
                                 db.toggle_completion(habit['id'], today, new_completed)
                                 if new_completed:
                                     st.balloons()
-                                    # Check achievements
                                     total_completions = len(db.get_completions(habit['id']))
                                     if total_completions == 1:
                                         db.unlock_achievement("first_complete")
@@ -391,7 +364,6 @@ else:
                             st.caption(f"+{habit['xp_reward']} XP")
                         
                         with col4:
-                            # Calculate streak
                             completions = db.get_completions(habit['id'])
                             streak = calculate_streak(completions)
                             st.caption(f"🔥 {streak} day streak")
@@ -401,7 +373,6 @@ else:
                 st.info("No habits yet! Create your first habit above.")
         
         with tab2:
-            # Show completed/archived habits
             all_habits = db.get_habits(active_only=False)
             completed_habits = [h for h in all_habits if not h.get('active', True)]
             
@@ -418,7 +389,6 @@ else:
         tab1, tab2 = st.tabs(["Active Goals", "Completed"])
         
         with tab1:
-            # Create New Goal
             with st.expander("➕ Create New Goal", expanded=False):
                 with st.form("new_goal_form"):
                     title = st.text_input("Goal Title*")
@@ -439,7 +409,6 @@ else:
                     submitted = st.form_submit_button("🎯 Create Goal")
                     
                     if submitted and title:
-                        # AI assess difficulty
                         assessment = ai_coach.assess_goal_difficulty(title, description, category)
                         
                         goal_id = db.create_goal(
@@ -452,7 +421,6 @@ else:
                             priority=priority
                         )
                         
-                        # Check achievement
                         goals = db.get_goals()
                         if len(goals) == 1:
                             db.unlock_achievement("first_goal")
@@ -462,7 +430,6 @@ else:
                         st.success(f"✨ Created goal: {title}")
                         st.rerun()
             
-            # Display Goals
             goals = db.get_goals(completed=False)
             
             if goals:
@@ -473,7 +440,6 @@ else:
                         if goal.get('description'):
                             st.caption(goal['description'])
                         
-                        # Progress slider
                         progress = st.slider(
                             "Progress",
                             0, 100,
@@ -489,7 +455,6 @@ else:
                                 st.balloons()
                                 st.success(f"🏆 Goal completed! +{goal['xp_reward']} XP")
                                 
-                                # Check achievements
                                 completed_goals = db.get_goals(completed=True)
                                 if len(completed_goals) == 1:
                                     db.unlock_achievement("first_goal_complete")
@@ -513,7 +478,6 @@ else:
                 st.info("No active goals! Create your first goal above.")
         
         with tab2:
-            # Completed Goals
             completed_goals = db.get_goals(completed=True)
             
             if completed_goals:
@@ -528,7 +492,6 @@ else:
     elif current_page == "Analytics":
         st.title("📊 Analytics")
         
-        # Time period selector
         period = st.selectbox(
             "Time Period",
             options=["daily", "weekly", "monthly", "yearly"],
@@ -537,7 +500,6 @@ else:
         
         start_date, end_date = get_date_range(period)
         
-        # Metrics
         habits = db.get_habits()
         total_completions = 0
         xp_earned = 0
@@ -585,29 +547,13 @@ else:
             
             if habit_data:
                 df = pd.DataFrame(habit_data)
-                
-                fig = px.bar(
-                    df,
-                    x='Habit',
-                    y='Completions',
-                    color='XP Earned',
-                    color_continuous_scale='YlOrRd',
-                    title="Habit Completions by XP Earned"
-                )
-                
-                fig.update_layout(
-                    plot_bgcolor='#0a0a0a',
-                    paper_bgcolor='#0a0a0a',
-                    font_color='#ffffff',
-                    title_font_color='#d4af37'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
+                st.bar_chart(df.set_index('Habit')['Completions'])
+                st.dataframe(df, use_container_width=True)
         
         st.markdown("---")
         
         # Goals Progress
-        st.markdown("### Goals Progress")
+        st.markdown("### 🎯 Goals Progress")
         goals = db.get_goals(completed=False)
         
         if goals:
@@ -622,7 +568,6 @@ else:
     elif current_page == "Notes":
         st.title("📝 Notes")
         
-        # Create New Note
         with st.expander("➕ Create New Note", expanded=False):
             with st.form("new_note_form"):
                 title = st.text_input("Note Title*")
@@ -648,7 +593,6 @@ else:
                         pinned=pinned
                     )
                     
-                    # Check achievement
                     notes = db.get_notes()
                     if len(notes) == 1:
                         db.unlock_achievement("first_note")
@@ -656,7 +600,6 @@ else:
                     st.success("✨ Note saved!")
                     st.rerun()
         
-        # Display Notes
         notes = db.get_notes()
         
         if notes:
@@ -686,7 +629,6 @@ else:
     elif current_page == "Rewards":
         st.title("🏆 Rewards & Achievements")
         
-        # Player Stats
         st.markdown("### 💪 Player Stats")
         
         stat_cols = st.columns(3)
@@ -699,12 +641,10 @@ else:
         
         st.markdown("---")
         
-        # Achievements
         st.markdown("### 🏅 Achievements")
         
         achievements = db.get_achievements()
         
-        # Group by category
         categories = {}
         for ach in achievements:
             cat = ach.get('category', 'general')
@@ -777,15 +717,6 @@ else:
                 )
                 st.success("✨ Settings saved!")
                 st.rerun()
-        
-        st.markdown("---")
-        
-        st.markdown("### 🗑️ Danger Zone")
-        
-        if st.button("🔄 Reset All Data", type="secondary"):
-            if st.checkbox("I understand this will delete all my data"):
-                # This would reset the database
-                st.warning("⚠️ Feature not implemented for safety")
         
         st.markdown("---")
         
