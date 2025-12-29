@@ -955,6 +955,369 @@ else:
             else:
                 st.caption("No completed goals yet. Complete your first to unlock achievements!")
 
+    # ===== AI COACH PAGE =====
+    elif current_page == "AI Coach":
+        user_name = profile.get('display_name', 'Hunter')
+        
+        st.title(f"🤖 AI Coach for {user_name}")
+        st.markdown(f"Your personal guide on the path to mastery. Ask anything, {user_name}.")
+        
+        # Check if AI is available
+        has_api_key = ai_coach.client is not None
+        
+        if not has_api_key:
+            st.warning("⚠️ AI Coach requires an Anthropic API key. Add it in Streamlit Cloud secrets or set ANTHROPIC_API_KEY environment variable.")
+            st.info("💡 Without AI, you'll get basic coaching responses. Add your API key for full AI-powered coaching!")
+        
+        st.markdown("---")
+        
+        # Tabs for different AI Coach features
+        coach_tabs = st.tabs(["💬 Ask Coach", "🎯 Goal Planning", "⚡ Habit Builder", "📈 Progress Analysis"])
+        
+        with coach_tabs[0]:  # Ask Coach
+            st.markdown(f"### 💬 Ask Your AI Coach, {user_name}")
+            st.caption("Get personalized advice using context from your philosophy library and current progress.")
+            
+            # Get all PDF context
+            pdf_context = db.get_all_document_content()
+            
+            with st.form("ask_coach_form"):
+                question = st.text_area(
+                    "What would you like guidance on?",
+                    height=150,
+                    placeholder=f"Example: How can I stay motivated when I feel stuck?\nExample: What wisdom from my library applies to my current goals?\nExample: How do I balance {profile.get('focus_areas', ['multiple areas'])[0] if profile.get('focus_areas') else 'my priorities'}?"
+                )
+                
+                include_library = st.checkbox("📚 Include context from my Philosophy Library", value=True)
+                include_progress = st.checkbox("📊 Include my current habits and goals", value=True)
+                
+                submitted = st.form_submit_button("🤖 Get AI Guidance", use_container_width=True)
+                
+                if submitted and question:
+                    if ai_coach.client:
+                        with st.spinner(f"🤖 AI Coach is thinking, {user_name}..."):
+                            try:
+                                # Build context
+                                context = ""
+                                
+                                if include_progress:
+                                    habits = db.get_habits()
+                                    goals = db.get_goals(completed=False)
+                                    context += f"\n\n{user_name}'s Current Habits:\n"
+                                    for h in habits[:5]:
+                                        context += f"- {h['name']} ({h['category']})\n"
+                                    context += f"\n{user_name}'s Active Goals:\n"
+                                    for g in goals[:5]:
+                                        context += f"- {g['title']} ({g.get('progress', 0)}% complete)\n"
+                                
+                                if include_library and pdf_context:
+                                    context += f"\n\nRelevant wisdom from {user_name}'s philosophy library:\n{pdf_context[:5000]}"
+                                
+                                # Get AI response
+                                message = ai_coach.client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=3000,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": f"""You are a wise AI coach helping {user_name} on their personal growth journey. 
+
+User's Philosophy Tradition: {profile.get('philosophy_tradition', 'esoteric').capitalize()}
+User's Focus Areas: {', '.join(profile.get('focus_areas', ['personal growth']))}
+
+{context}
+
+Question from {user_name}:
+{question}
+
+Provide thoughtful, actionable guidance drawing from their philosophy tradition and library. Be encouraging but honest. Use their name ({user_name}) occasionally."""
+                                    }]
+                                )
+                                
+                                response = message.content[0].text
+                                
+                                st.success(f"🤖 **AI Coach's Guidance for {user_name}:**")
+                                st.markdown(response)
+                                
+                            except Exception as e:
+                                st.error(f"Error getting AI response: {e}")
+                    else:
+                        st.info(f"{user_name}, add your Anthropic API key to unlock full AI coaching!")
+        
+        with coach_tabs[1]:  # Goal Planning
+            st.markdown(f"### 🎯 AI-Powered Goal Planning for {user_name}")
+            st.caption("Let AI help you break down your goals into actionable steps and suggest supporting habits.")
+            
+            # Select a goal
+            goals = db.get_goals(completed=False)
+            
+            if goals:
+                goal_titles = {g['title']: g['id'] for g in goals}
+                
+                selected_goal_title = st.selectbox(
+                    "Select a goal to plan:",
+                    options=list(goal_titles.keys())
+                )
+                
+                if st.button(f"🤖 Generate Action Plan for: {selected_goal_title}", use_container_width=True):
+                    goal_id = goal_titles[selected_goal_title]
+                    goal = db.get_goal_by_id(goal_id)
+                    
+                    with st.spinner(f"🤖 AI is creating your action plan, {user_name}..."):
+                        # Get PDF context
+                        pdf_context = db.get_all_document_content()
+                        
+                        # Generate action steps
+                        action_steps = ai_coach.generate_action_steps(
+                            goal['title'],
+                            goal.get('description', ''),
+                            goal.get('category', 'personal'),
+                            pdf_context
+                        )
+                        
+                        # Generate habit suggestions
+                        habit_suggestions = ai_coach.generate_habit_suggestions(
+                            goal['title'],
+                            goal.get('description', ''),
+                            action_steps,
+                            pdf_context
+                        )
+                        
+                        # Update goal in database
+                        db.update_goal(
+                            goal_id,
+                            ai_generated_steps=action_steps,
+                            habit_suggestions=habit_suggestions
+                        )
+                        
+                        st.success(f"✨ Action plan created for {user_name}!")
+                        
+                        # Display action steps
+                        st.markdown("#### 📋 Action Steps")
+                        for idx, step in enumerate(action_steps, 1):
+                            st.markdown(f"**{idx}.** {step}")
+                        
+                        st.markdown("---")
+                        
+                        # Display habit suggestions
+                        st.markdown("#### ⚡ Suggested Habits to Support This Goal")
+                        for habit in habit_suggestions:
+                            with st.expander(f"💡 {habit['name']}"):
+                                st.markdown(f"**Description:** {habit['description']}")
+                                st.markdown(f"**Frequency:** {habit['frequency'].capitalize()}")
+                                
+                                if st.button(f"➕ Create This Habit", key=f"create_habit_{habit['name']}"):
+                                    # Create habit from suggestion
+                                    assessment = ai_coach.assess_habit_difficulty(
+                                        habit['name'],
+                                        habit['description'],
+                                        goal.get('category', 'personal'),
+                                        pdf_context
+                                    )
+                                    
+                                    db.create_habit(
+                                        name=habit['name'],
+                                        category=goal.get('category', 'personal'),
+                                        description=habit['description'],
+                                        difficulty=assessment['difficulty'],
+                                        xp_reward=assessment['xp_reward'],
+                                        gold_reward=assessment['gold_reward'],
+                                        frequency=habit['frequency']
+                                    )
+                                    
+                                    st.success(f"✅ Created habit: {habit['name']}")
+                                    st.rerun()
+            else:
+                st.info(f"{user_name}, create a goal first to use AI planning!")
+        
+        with coach_tabs[2]:  # Habit Builder
+            st.markdown(f"### ⚡ AI Habit Builder for {user_name}")
+            st.caption("Describe what you want to achieve, and AI will design the perfect habit.")
+            
+            with st.form("habit_builder_form"):
+                st.markdown("**Tell AI what you want to achieve:**")
+                
+                habit_goal = st.text_area(
+                    "What do you want to accomplish?",
+                    height=100,
+                    placeholder=f"Example: I want to improve my focus and concentration\nExample: I want to build strength and muscle\nExample: I want to deepen my meditation practice"
+                )
+                
+                category = st.selectbox(
+                    "Category",
+                    options=["fitness", "health", "learning", "mindfulness", "productivity", "creativity"]
+                )
+                
+                use_library = st.checkbox("📚 Use context from my philosophy library", value=True)
+                
+                submitted = st.form_submit_button("🤖 Design My Habit", use_container_width=True)
+                
+                if submitted and habit_goal:
+                    if ai_coach.client:
+                        with st.spinner("🤖 Designing your perfect habit..."):
+                            try:
+                                pdf_context = db.get_all_document_content() if use_library else ""
+                                
+                                context_note = ""
+                                if pdf_context:
+                                    context_note = f"\n\nDraw wisdom from {user_name}'s philosophy library:\n{pdf_context[:3000]}"
+                                
+                                message = ai_coach.client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=1000,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": f"""Design a specific, actionable daily habit for {user_name} to achieve this goal:
+
+Goal: {habit_goal}
+Category: {category}
+Philosophy Tradition: {profile.get('philosophy_tradition', 'esoteric')}{context_note}
+
+Provide:
+1. Habit Name (concise, inspiring)
+2. Detailed Description (what to do, when, how)
+3. Recommended Frequency
+4. Why this habit works (philosophy-backed reasoning)
+
+Format:
+HABIT NAME: [name]
+DESCRIPTION: [description]
+FREQUENCY: [daily/weekdays/weekends]
+WHY IT WORKS: [reasoning]"""
+                                    }]
+                                )
+                                
+                                response = message.content[0].text.strip()
+                                
+                                # Parse response
+                                habit_name = ""
+                                habit_desc = ""
+                                frequency = "daily"
+                                reasoning = ""
+                                
+                                for line in response.split('\n'):
+                                    if line.startswith('HABIT NAME:'):
+                                        habit_name = line.split(':', 1)[1].strip()
+                                    elif line.startswith('DESCRIPTION:'):
+                                        habit_desc = line.split(':', 1)[1].strip()
+                                    elif line.startswith('FREQUENCY:'):
+                                        freq = line.split(':', 1)[1].strip().lower()
+                                        if 'weekday' in freq:
+                                            frequency = 'weekdays'
+                                        elif 'weekend' in freq:
+                                            frequency = 'weekends'
+                                        else:
+                                            frequency = 'daily'
+                                    elif line.startswith('WHY IT WORKS:'):
+                                        reasoning = line.split(':', 1)[1].strip()
+                                
+                                st.success(f"✨ Habit designed for {user_name}!")
+                                
+                                st.markdown(f"### {habit_name}")
+                                st.markdown(f"**Description:** {habit_desc}")
+                                st.markdown(f"**Frequency:** {frequency.capitalize()}")
+                                st.info(f"**💡 Why it works:** {reasoning}")
+                                
+                                if st.button("➕ Create This Habit", key="create_designed_habit"):
+                                    assessment = ai_coach.assess_habit_difficulty(
+                                        habit_name,
+                                        habit_desc,
+                                        category,
+                                        pdf_context
+                                    )
+                                    
+                                    db.create_habit(
+                                        name=habit_name,
+                                        category=category,
+                                        description=habit_desc,
+                                        difficulty=assessment['difficulty'],
+                                        xp_reward=assessment['xp_reward'],
+                                        gold_reward=assessment['gold_reward'],
+                                        frequency=frequency
+                                    )
+                                    
+                                    st.success(f"✅ Habit created: {habit_name}")
+                                    st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                    else:
+                        st.info("Add API key for AI habit design!")
+        
+        with coach_tabs[3]:  # Progress Analysis
+            st.markdown(f"### 📈 AI Progress Analysis for {user_name}")
+            st.caption("Get AI insights on your journey and personalized recommendations.")
+            
+            if st.button(f"🤖 Analyze My Progress", use_container_width=True):
+                if ai_coach.client:
+                    with st.spinner(f"🤖 Analyzing {user_name}'s journey..."):
+                        try:
+                            # Gather data
+                            habits = db.get_habits()
+                            goals = db.get_goals()
+                            completed_goals = db.get_goals(completed=True)
+                            stats = db.get_stats()
+                            
+                            # Calculate stats
+                            total_completions = 0
+                            for habit in habits:
+                                completions = db.get_completions(habit['id'])
+                                total_completions += len(completions)
+                            
+                            # Build analysis context
+                            context = f"""
+{user_name}'s Stats:
+- Level: {stats.get('level', 1)}
+- Total XP: {stats.get('total_xp', 0):,}
+- Active Habits: {len(habits)}
+- Total Habit Completions: {total_completions}
+- Active Goals: {len([g for g in goals if not g.get('completed')])}
+- Completed Goals: {len(completed_goals)}
+
+Recent Habits:
+"""
+                            for habit in habits[:10]:
+                                completions = db.get_completions(habit['id'])
+                                streak = calculate_streak(completions)
+                                context += f"- {habit['name']}: {len(completions)} completions, {streak} day streak\n"
+                            
+                            context += "\nActive Goals:\n"
+                            for goal in [g for g in goals if not g.get('completed')][:5]:
+                                context += f"- {goal['title']}: {goal.get('progress', 0)}% complete\n"
+                            
+                            pdf_context = db.get_all_document_content()
+                            
+                            # Get AI analysis
+                            message = ai_coach.client.messages.create(
+                                model="claude-sonnet-4-20250514",
+                                max_tokens=3000,
+                                messages=[{
+                                    "role": "user",
+                                    "content": f"""Analyze {user_name}'s progress and provide:
+
+1. **Strengths** - What they're doing well (2-3 points)
+2. **Growth Areas** - Where they can improve (2-3 points)
+3. **Recommendations** - Specific actionable next steps (3-5 points)
+4. **Philosophical Insight** - Wisdom from their {profile.get('philosophy_tradition', 'esoteric')} tradition that applies
+
+{context}
+
+Philosophy Library Context:
+{pdf_context[:3000] if pdf_context else 'No documents uploaded yet'}
+
+Be encouraging, specific, and actionable. Use {user_name}'s name."""
+                                }]
+                            )
+                            
+                            analysis = message.content[0].text
+                            
+                            st.markdown("### 🤖 AI Analysis")
+                            st.markdown(analysis)
+                            
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                else:
+                    st.info("Add API key for progress analysis!")
+
     # ===== SHOP PAGE =====
     elif current_page == "Shop":
         st.title("🛒 Shadow Monarch's Shop")
