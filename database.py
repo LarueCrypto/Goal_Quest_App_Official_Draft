@@ -87,7 +87,7 @@ class Database:
             UNIQUE(habit_id, date)
         )''')
         
-        # User Stats
+        # User Stats (WITH GOLD!)
         c.execute('''CREATE TABLE IF NOT EXISTS user_stats (
             id INTEGER PRIMARY KEY,
             level INTEGER DEFAULT 1,
@@ -145,15 +145,16 @@ class Database:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
         
-        # Inventory
+        # Inventory (SHOP SYSTEM!)
         c.execute('''CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_id TEXT NOT NULL,
             quantity INTEGER DEFAULT 1,
+            equipped BOOLEAN DEFAULT 0,
             purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
         
-        # Active Effects
+        # Active Effects (CONSUMABLES!)
         c.execute('''CREATE TABLE IF NOT EXISTS active_effects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             effect_type TEXT NOT NULL,
@@ -161,6 +162,16 @@ class Database:
             expires_at TIMESTAMP NOT NULL,
             item_id TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        
+        # Equipment Loadout
+        c.execute('''CREATE TABLE IF NOT EXISTS equipment (
+            id INTEGER PRIMARY KEY,
+            weapon_id TEXT,
+            armor_id TEXT,
+            ring_id TEXT,
+            amulet_id TEXT,
+            head_id TEXT
         )''')
         
         conn.commit()
@@ -178,7 +189,12 @@ class Database:
         # Initialize user stats if not exists
         c.execute("SELECT COUNT(*) FROM user_stats")
         if c.fetchone()[0] == 0:
-            c.execute("INSERT INTO user_stats (id) VALUES (1)")
+            c.execute("INSERT INTO user_stats (id, current_gold) VALUES (1, 1000)")  # Start with 1000 gold
+        
+        # Initialize equipment if not exists
+        c.execute("SELECT COUNT(*) FROM equipment")
+        if c.fetchone()[0] == 0:
+            c.execute("INSERT INTO equipment (id) VALUES (1)")
         
         conn.commit()
     
@@ -188,7 +204,15 @@ class Database:
         c.execute("SELECT * FROM user_profile WHERE id = 1")
         row = c.fetchone()
         if row:
-            return dict(row)
+            profile = dict(row)
+            # Parse JSON fields
+            for field in ['philosophy_traditions', 'focus_areas', 'challenge_approaches']:
+                if profile.get(field):
+                    try:
+                        profile[field] = json.loads(profile[field]) if isinstance(profile[field], str) else profile[field]
+                    except:
+                        profile[field] = []
+            return profile
         return {}
     
     def update_profile(self, **kwargs):
@@ -207,7 +231,7 @@ class Database:
         c.execute(query, values)
         conn.commit()
     
-    # ===== HABITS =====
+    # ===== HABITS ===== (same as before, keeping existing code)
     def create_habit(self, name: str, category: str, description: str = "", **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
@@ -236,7 +260,10 @@ class Database:
         
         for habit in habits:
             if habit.get('frequency_days'):
-                habit['frequency_days'] = json.loads(habit['frequency_days']) if isinstance(habit['frequency_days'], str) else []
+                try:
+                    habit['frequency_days'] = json.loads(habit['frequency_days']) if isinstance(habit['frequency_days'], str) else []
+                except:
+                    habit['frequency_days'] = []
         
         return habits
     
@@ -276,10 +303,15 @@ class Database:
                 VALUES (?, ?, 1)
             """, (habit_id, date_str))
             
+            # Get XP reward and add it
             c.execute("SELECT xp_reward FROM habits WHERE id = ?", (habit_id,))
             row = c.fetchone()
             if row:
-                self.add_xp(row[0])
+                xp_reward = row[0]
+                # Award XP
+                self.add_xp(xp_reward)
+                # Award gold (10% of XP as gold)
+                self.add_gold(int(xp_reward * 0.1))
         else:
             c.execute("DELETE FROM completions WHERE habit_id = ? AND date = ?", (habit_id, date_str))
         
@@ -306,7 +338,7 @@ class Database:
         row = c.fetchone()
         return bool(row and row[0]) if row else False
     
-    # ===== GOALS =====
+    # ===== GOALS ===== (keeping existing code)
     def create_goal(self, title: str, **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
@@ -335,7 +367,10 @@ class Database:
         
         for goal in goals:
             if goal.get('steps'):
-                goal['steps'] = json.loads(goal['steps']) if isinstance(goal['steps'], str) else []
+                try:
+                    goal['steps'] = json.loads(goal['steps']) if isinstance(goal['steps'], str) else []
+                except:
+                    goal['steps'] = []
         
         return goals
     
@@ -346,11 +381,13 @@ class Database:
         if 'steps' in kwargs and isinstance(kwargs['steps'], list):
             kwargs['steps'] = json.dumps(kwargs['steps'])
         
+        # If marking as complete, award XP
         if kwargs.get('completed'):
             c.execute("SELECT xp_reward, completed FROM goals WHERE id = ?", (goal_id,))
             row = c.fetchone()
-            if row and not row[1]:
+            if row and not row[1]:  # If not already completed
                 self.add_xp(row[0])
+                self.add_gold(int(row[0] * 0.2))  # 20% of XP as gold for goals
         
         fields = []
         values = []
@@ -377,6 +414,7 @@ class Database:
         return dict(row) if row else {}
     
     def add_xp(self, amount: int):
+        """Add XP and handle leveling up"""
         conn = self.get_connection()
         c = conn.cursor()
         
@@ -388,6 +426,7 @@ class Database:
             new_current = current_xp + amount
             new_total = total_xp + amount
             
+            # Level up logic: level N requires N * 500 XP
             new_level = level
             while new_current >= new_level * 500:
                 new_current -= new_level * 500
@@ -401,11 +440,12 @@ class Database:
             """, (new_level, new_current, new_total, new_level, level))
             
             conn.commit()
-            return new_level > level
+            return new_level > level  # Return True if leveled up
         
         return False
     
     def add_gold(self, amount: int):
+        """Add gold to player"""
         conn = self.get_connection()
         c = conn.cursor()
         c.execute("""
@@ -415,7 +455,22 @@ class Database:
         """, (amount, amount))
         conn.commit()
     
+    def spend_gold(self, amount: int) -> bool:
+        """Spend gold if available"""
+        conn = self.get_connection()
+        c = conn.cursor()
+        
+        c.execute("SELECT current_gold FROM user_stats WHERE id = 1")
+        row = c.fetchone()
+        
+        if row and row[0] >= amount:
+            c.execute("UPDATE user_stats SET current_gold = current_gold - ? WHERE id = 1", (amount,))
+            conn.commit()
+            return True
+        return False
+    
     def update_stat(self, stat_name: str, amount: int):
+        """Update a specific stat"""
         conn = self.get_connection()
         c = conn.cursor()
         c.execute(f"""
@@ -425,7 +480,46 @@ class Database:
         """, (amount,))
         conn.commit()
     
-    # ===== NOTES =====
+    # ===== INVENTORY & SHOP =====
+    def add_to_inventory(self, item_id: str, quantity: int = 1):
+        """Add item to inventory"""
+        conn = self.get_connection()
+        c = conn.cursor()
+        
+        # Check if item already exists
+        c.execute("SELECT id, quantity FROM inventory WHERE item_id = ?", (item_id,))
+        row = c.fetchone()
+        
+        if row:
+            # Update quantity
+            c.execute("UPDATE inventory SET quantity = quantity + ? WHERE item_id = ?", (quantity, item_id))
+        else:
+            # Insert new
+            c.execute("INSERT INTO inventory (item_id, quantity) VALUES (?, ?)", (item_id, quantity))
+        
+        conn.commit()
+    
+    def get_inventory(self) -> List[Dict]:
+        """Get all inventory items"""
+        c = self.get_connection().cursor()
+        c.execute("SELECT * FROM inventory ORDER BY purchased_at DESC")
+        return [dict(row) for row in c.fetchall()]
+    
+    def get_equipped_items(self) -> Dict:
+        """Get currently equipped items"""
+        c = self.get_connection().cursor()
+        c.execute("SELECT * FROM equipment WHERE id = 1")
+        row = c.fetchone()
+        return dict(row) if row else {}
+    
+    def equip_item(self, item_id: str, slot: str):
+        """Equip an item to a slot"""
+        conn = self.get_connection()
+        c = conn.cursor()
+        c.execute(f"UPDATE equipment SET {slot}_id = ? WHERE id = 1", (item_id,))
+        conn.commit()
+    
+    # ===== NOTES ===== (keeping existing code)
     def create_note(self, title: str, content: str = "", **kwargs) -> int:
         conn = self.get_connection()
         c = conn.cursor()
@@ -449,7 +543,10 @@ class Database:
         
         for note in notes:
             if note.get('tags'):
-                note['tags'] = json.loads(note['tags']) if isinstance(note['tags'], str) else []
+                try:
+                    note['tags'] = json.loads(note['tags']) if isinstance(note['tags'], str) else []
+                except:
+                    note['tags'] = []
         
         return notes
     
@@ -485,30 +582,47 @@ class Database:
         query = "SELECT * FROM achievements"
         if unlocked_only:
             query += " WHERE unlocked_at IS NOT NULL"
-        query += " ORDER BY tier, category"
+        query += " ORDER BY unlocked_at DESC NULLS LAST, tier, category"
         
         c.execute(query)
         achievements = [dict(row) for row in c.fetchall()]
         
         for ach in achievements:
             if ach.get('stat_bonus'):
-                ach['stat_bonus'] = json.loads(ach['stat_bonus']) if isinstance(ach['stat_bonus'], str) else None
+                try:
+                    ach['stat_bonus'] = json.loads(ach['stat_bonus']) if isinstance(ach['stat_bonus'], str) else None
+                except:
+                    ach['stat_bonus'] = None
         
         return achievements
     
     def unlock_achievement(self, key: str):
+        """Unlock an achievement and award rewards"""
         conn = self.get_connection()
         c = conn.cursor()
         
-        c.execute("SELECT unlocked_at, xp_reward, gold_reward FROM achievements WHERE key = ?", (key,))
+        c.execute("SELECT unlocked_at, xp_reward, gold_reward, stat_bonus FROM achievements WHERE key = ?", (key,))
         row = c.fetchone()
         
-        if row and not row[0]:
+        if row and not row[0]:  # Not yet unlocked
             c.execute("UPDATE achievements SET unlocked_at = CURRENT_TIMESTAMP WHERE key = ?", (key,))
+            
+            # Award XP
             if row[1]:
                 self.add_xp(row[1])
+            
+            # Award gold
             if row[2]:
                 self.add_gold(row[2])
+            
+            # Award stat bonus
+            if row[3]:
+                try:
+                    bonus = json.loads(row[3])
+                    self.update_stat(bonus['stat'], bonus['amount'])
+                except:
+                    pass
+            
             conn.commit()
             return True
         return False
