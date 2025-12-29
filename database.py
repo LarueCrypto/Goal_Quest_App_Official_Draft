@@ -750,6 +750,8 @@ class Database:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (document_id) REFERENCES philosophy_documents(id) ON DELETE CASCADE
         )''')
+
+        self.create_segments_table()
         
         conn.commit()
     
