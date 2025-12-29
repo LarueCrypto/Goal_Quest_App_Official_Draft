@@ -344,79 +344,153 @@ else:
     current_page = st.session_state.page
 
     # ===== DASHBOARD PAGE =====
-    # ===== DASHBOARD PAGE ===== (ENHANCED WITH CHARACTER)
     # ===== DASHBOARD PAGE =====
     if current_page == "Dashboard":
-        # Get user name for personalization
         user_name = profile.get('display_name', 'Hunter')
         
         st.title(f"🏠 {user_name}'s Command Center")
         st.markdown(f"<p style='font-size: 1.2em; color: #d4af37;'>Welcome back, {user_name}! Ready to continue your journey?</p>", unsafe_allow_html=True)
         
-        # CHARACTER DISPLAY - Main feature!
+        st.markdown("---")
+        
+        # CHARACTER DISPLAY - Simplified working version
         col_char, col_stats = st.columns([1, 1])
         
         with col_char:
             st.markdown("### 👤 Your Hunter")
             
-            try:
-                # Get equipped items
-                equipped = db.get_equipped_items()
-                
-                # Generate character SVG
-                character_svg = get_character_svg(profile, stats, equipped)
-                
-                # Render SVG in a container
-                st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); 
-                            padding: 20px; 
-                            border-radius: 15px; 
-                            border: 2px solid #d4af37;
-                            text-align: center;'>
-                    {character_svg}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Character info below avatar
-                st.markdown(f"""
-                <div style='text-align: center; margin-top: 20px; padding: 15px; 
-                            background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); 
-                            border-radius: 10px; border: 2px solid #d4af37;'>
-                    <h3 style='color: #d4af37; margin: 0;'>{user_name}</h3>
-                    <p style='color: #ffffff; margin: 5px 0;'>{profile.get('avatar_style', 'warrior').capitalize()} • Level {stats.get('level', 1)}</p>
-                    <p style='color: #ffd700; margin: 5px 0;'>💰 {stats.get('current_gold', 0):,} Gold</p>
-                </div>
-                """, unsafe_allow_html=True)
+            # Character card with level-based appearance
+            level = stats.get('level', 1)
+            avatar_style = profile.get('avatar_style', 'warrior')
             
-            except Exception as e:
-                # Fallback if character rendering fails
-                st.error(f"Character display error. Showing simplified view.")
-                st.markdown(f"""
-                <div style='text-align: center; padding: 40px; 
-                            background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); 
-                            border-radius: 15px; border: 2px solid #d4af37;'>
-                    <div style='font-size: 120px;'>⚔️</div>
-                    <h2 style='color: #d4af37;'>{user_name}</h2>
-                    <p style='color: #ffffff;'>{profile.get('avatar_style', 'warrior').capitalize()}</p>
-                    <p style='color: #ffd700; font-size: 24px;'>Level {stats.get('level', 1)}</p>
+            # Determine stage
+            if level >= 76:
+                stage_name = "Shadow Monarch"
+                stage_icon = "👑"
+                border_color = "#FFD700"
+                glow = "0 0 30px rgba(255, 215, 0, 0.8)"
+            elif level >= 51:
+                stage_name = "S-Rank Hunter"
+                stage_icon = "⚔️"
+                border_color = "#FFA500"
+                glow = "0 0 25px rgba(255, 165, 0, 0.6)"
+            elif level >= 26:
+                stage_name = "Elite Hunter"
+                stage_icon = "🛡️"
+                border_color = "#d4af37"
+                glow = "0 0 20px rgba(212, 175, 55, 0.5)"
+            elif level >= 11:
+                stage_name = "Skilled Hunter"
+                stage_icon = "🗡️"
+                border_color = "#C0C0C0"
+                glow = "0 0 15px rgba(192, 192, 192, 0.4)"
+            else:
+                stage_name = "Novice Hunter"
+                stage_icon = "⚡"
+                border_color = "#808080"
+                glow = "0 0 10px rgba(128, 128, 128, 0.3)"
+            
+            # Avatar style icons
+            style_icons = {
+                'warrior': '⚔️',
+                'mage': '🔮',
+                'rogue': '🗡️',
+                'sage': '📿'
+            }
+            
+            main_icon = style_icons.get(avatar_style, '⚔️')
+            
+            # Render character card
+            st.markdown(f"""
+            <div style='
+                background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+                padding: 40px;
+                border-radius: 20px;
+                border: 4px solid {border_color};
+                box-shadow: {glow};
+                text-align: center;
+                margin: 20px 0;
+            '>
+                <div style='font-size: 120px; margin-bottom: 20px;'>{main_icon}</div>
+                <div style='font-size: 48px; margin-bottom: 10px;'>{stage_icon}</div>
+                <h2 style='color: #d4af37; margin: 10px 0;'>{user_name}</h2>
+                <p style='color: #ffffff; font-size: 1.2em; margin: 5px 0;'>{stage_name}</p>
+                <p style='color: #aaaaaa; margin: 5px 0;'>{avatar_style.capitalize()}</p>
+                
+                <div style='
+                    background: linear-gradient(90deg, #d4af37 0%, #ffd700 100%);
+                    padding: 15px;
+                    border-radius: 15px;
+                    margin-top: 20px;
+                '>
+                    <p style='color: #0a0a0a; font-size: 1.5em; font-weight: bold; margin: 0;'>
+                        LEVEL {level}
+                    </p>
                 </div>
-                """, unsafe_allow_html=True)
+                
+                <div style='margin-top: 20px;'>
+                    <p style='color: #ffd700; font-size: 1.3em; margin: 5px 0;'>
+                        💰 {stats.get('current_gold', 0):,} Gold
+                    </p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Equipment Display
+            st.markdown("#### ⚔️ Equipment")
+            equipped = db.get_equipped_items()
+            
+            eq_cols = st.columns(2)
+            slots = [
+                ('weapon_id', '⚔️', 'Weapon'),
+                ('armor_id', '🛡️', 'Armor'),
+                ('ring_id', '💍', 'Ring'),
+                ('amulet_id', '📿', 'Amulet')
+            ]
+            
+            for idx, (slot, icon, name) in enumerate(slots):
+                with eq_cols[idx % 2]:
+                    item_id = equipped.get(slot, '')
+                    if item_id:
+                        item_name = item_id.replace('_', ' ').title()
+                        st.markdown(f"""
+                        <div style='
+                            background: #2d2d2d;
+                            padding: 10px;
+                            border-radius: 8px;
+                            border: 2px solid #d4af37;
+                            margin: 5px 0;
+                        '>
+                            <div style='font-size: 24px;'>{icon}</div>
+                            <div style='color: #d4af37; font-size: 0.9em;'>{name}</div>
+                            <div style='color: #ffffff; font-size: 0.8em;'>{item_name}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.caption(f"{icon} {name}: Empty")
         
         with col_stats:
             st.markdown(f"### 📊 {user_name}'s Power")
             
-            # Animated stat bars
-            try:
-                stat_bars_html = get_stat_visual_bars(stats)
-                st.markdown(stat_bars_html, unsafe_allow_html=True)
-            except:
-                # Fallback stat display
-                st.markdown("**Player Stats:**")
-                for stat in ['strength', 'intelligence', 'vitality', 'agility', 'sense', 'willpower']:
-                    st.metric(stat.capitalize(), stats.get(stat, 0))
+            # Display stats as metrics
+            stats_config = {
+                'strength': '⚔️',
+                'intelligence': '🧠',
+                'vitality': '❤️',
+                'agility': '⚡',
+                'sense': '👁️',
+                'willpower': '🔥'
+            }
+            
+            stat_cols = st.columns(2)
+            for idx, (stat, icon) in enumerate(stats_config.items()):
+                with stat_cols[idx % 2]:
+                    value = stats.get(stat, 0)
+                    st.metric(f"{icon} {stat.capitalize()}", value)
+            
+            st.markdown("---")
             
             # Quick stats
-            st.markdown("---")
             col1, col2 = st.columns(2)
             with col1:
                 st.metric("⚡ Total XP", format_xp(stats.get('total_xp', 0)))
@@ -443,7 +517,6 @@ else:
         motivation = db.get_daily_motivation(today)
         
         if not motivation:
-            # Generate contextual quote
             habit_context = None
             if habits:
                 categories = [h['category'] for h in habits]
@@ -456,34 +529,15 @@ else:
                 user_name=user_name
             )
             
-            db.save_motivation(
-                today,
-                quote_data['quote'],
-                quote_data['philosophy'],
-                quote_data['tradition'],
-                habit_context
-            )
+            db.save_motivation(today, quote_data['quote'], quote_data['philosophy'], quote_data['tradition'], habit_context)
             motivation = db.get_daily_motivation(today)
         
         if motivation:
-            st.markdown(f"""
-            <div style='background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%); 
-                        border-left: 5px solid #d4af37; 
-                        padding: 25px; 
-                        margin: 20px 0; 
-                        border-radius: 10px; 
-                        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);'>
-                <p style='font-size: 1.3em; color: #d4af37; margin-bottom: 15px; font-style: italic;'>"{motivation['quote']}"</p>
-                <p style='font-size: 1em; line-height: 1.8; color: #ffffff;'>{motivation['philosophy']}</p>
-                <p style='text-align: right; color: #d4af37; margin-top: 15px; font-weight: bold;'>
-                    — {motivation['tradition'].capitalize()} Tradition
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info(f"**\"{motivation['quote']}\"**\n\n{motivation['philosophy']}\n\n— *{motivation['tradition'].capitalize()} Tradition*")
         
         st.markdown("---")
         
-        # Priority Quests Section
+        # Priority Quests
         st.markdown(f"### ⭐ {user_name}'s Priority Quests")
         priority_habits = [h for h in habits if h.get('priority')] if habits else []
         
@@ -493,11 +547,10 @@ else:
                 
                 with col1:
                     completed = db.is_completed(habit['id'], today)
-                    checkbox_key = f"dash_habit_{habit['id']}"
                     new_completed = st.checkbox(
                         f"{'✅' if completed else '⬜'} **{habit['name']}**",
                         value=completed,
-                        key=checkbox_key
+                        key=f"dash_habit_{habit['id']}"
                     )
                     
                     if new_completed != completed:
@@ -515,9 +568,40 @@ else:
                     st.caption(f"⚡ +{habit['xp_reward']} XP")
                     st.caption(f"💰 +{habit.get('gold_reward', 0)} Gold")
         else:
-            st.info(f"💡 {user_name}, mark habits as priority in the Habits page to see them here!")
+            st.info(f"💡 {user_name}, mark habits as priority in the Habits page!")
         
         st.markdown("---")
+        
+        # Active Goals
+        st.markdown(f"### 🎯 {user_name}'s Active Goals")
+        goals = db.get_goals(completed=False)
+        
+        if goals:
+            for goal in goals[:3]:
+                progress = goal.get('progress', 0)
+                st.markdown(f"**{goal['title']}**")
+                st.progress(progress / 100)
+                st.caption(f"{progress}% • {goal.get('category', 'personal').capitalize()}")
+        else:
+            st.info(f"🎯 {user_name}, create your first goal!")
+        
+        # Quick Actions
+        st.markdown("---")
+        st.markdown(f"### ⚡ Quick Actions for {user_name}")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("➕ Create Habit", use_container_width=True):
+                st.session_state.page = 'Habits'
+                st.rerun()
+        with col2:
+            if st.button("🎯 Create Goal", use_container_width=True):
+                st.session_state.page = 'Goals'
+                st.rerun()
+        with col3:
+            if st.button("🛒 Visit Shop", use_container_width=True):
+                st.session_state.page = 'Shop'
+                st.rerun()
         
         # Active Goals Summary
         st.markdown(f"### 🎯 {user_name}'s Active Goals")
