@@ -1,5 +1,3 @@
-import streamlit as st
-st.write("Streamlit is alive.")
 import os
 from typing import Optional, Dict, List
 import random
