@@ -80,3 +80,4 @@ def get_date_range(period: str) -> Tuple[str, str]:
         return start.strftime('%Y-%m-%d'), end.strftime('%Y-%m-%d')
     
     return today.strftime('%Y-%m-%d'), today.strftime('%Y-%m-%d')
+```
