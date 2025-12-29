@@ -1,4 +1,4 @@
-# Add this import at the top
+# Import character visuals
 from character_visuals import get_character_svg, get_stat_visual_bars, get_level_up_animation, get_equipment_display
 import streamlit as st
 import pandas as pd
