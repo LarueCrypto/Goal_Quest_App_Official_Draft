@@ -1,18 +1,23 @@
 import os
 from typing import Optional, Dict, List
 import random
+from anthropic import Anthropic
 
 class AICoach:
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        self.client = None
+    def __init__(self, api_key):
+        self.client = Anthropic(api_key=api_key) if api_key else None
+
+    def generate_daily_quote(self, tradition, habit_context, user_name):
+        if not self.client:
+            return {"quote": "Keep going!", "philosophy": "Connect API for wisdom", "tradition": tradition}
         
-        if self.api_key:
-            try:
-                import anthropic
-                self.client = anthropic.Anthropic(api_key=self.api_key)
-            except:
-                self.client = None
+        # This is where the Anthropic API call happens
+        response = self.client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=500,
+            messages=[{"role": "user", "content": f"Generate a {tradition} quote for {user_name}..."}]
+        )
+        # Add logic here to parse the response...
     
     def assess_habit_difficulty(self, name: str, description: str, category: str, pdf_context: str = "") -> Dict:
         """Assess habit difficulty using AI or fallback logic with 50 XP increments"""
