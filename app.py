@@ -1,6 +1,8 @@
 # Import character visuals
-from character_visuals import get_character_svg, get_stat_visual_bars, get_level_up_animation, get_equipment_display
 import streamlit as st
+import PyPDF2
+import io
+import os
 import pandas as pd
 from datetime import datetime, timedelta, date
 from database import Database
