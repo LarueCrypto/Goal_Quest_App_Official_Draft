@@ -979,7 +979,7 @@ else:
         # Tabs for different AI Coach features
         coach_tabs = st.tabs(["💬 Ask Coach", "🎯 Goal Planning", "⚡ Habit Builder", "📈 Progress Analysis"])
         
-      with coach_tabs[0]:  # Ask Coach
+        with coach_tabs[0]:  # Ask Coach
             st.markdown(f"### 💬 Ask Your AI Coach")
             
             # Retrieves all uploaded content to give the AI context
