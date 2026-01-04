@@ -930,6 +930,7 @@ else:
                     st.markdown("---")
             else:
                 st.caption("No completed goals yet. Complete your first to unlock achievements!")
+    
     # ===== AI COACH PAGE =====
     elif current_page == "AI Coach":
         user_name = profile.get('display_name', 'Hunter')
@@ -944,11 +945,10 @@ else:
             if uploaded_file:
                 if st.button("Analyze & Save to Library"):
                     with st.spinner("The Coach is studying your document..."):
-                        # 1. Extract text from the PDF
                         pdf_text = extract_pdf_text(uploaded_file)
                         
                         if pdf_text:
-                            # 2. Save raw document to the 'philosophy_documents' table
+                            # Save to philosophy_documents table
                             doc_id = db.upload_document(
                                 filename=uploaded_file.name,
                                 content=pdf_text,
@@ -956,10 +956,10 @@ else:
                                 file_size=uploaded_file.size
                             )
                             
-                            # 3. Generate AI analysis (summary, concepts, themes)
+                            # AI Analysis
                             analysis = ai_coach.analyze_pdf_content(pdf_text, uploaded_file.name)
                             
-                            # 4. Update the record with the analysis results
+                            # Update record with analysis
                             db.update_document(
                                 doc_id, 
                                 ai_summary=analysis.get('summary', ''), 
@@ -970,11 +970,39 @@ else:
         
         # Check if AI is available
         has_api_key = ai_coach.client is not None
-        
         if not has_api_key:
             st.warning("⚠️ AI Coach requires an Anthropic API key. Add it in Streamlit Cloud secrets.")
         
         st.markdown("---")
+        
+        # Tabs for different AI Coach features
+        coach_tabs = st.tabs(["💬 Ask Coach", "🎯 Goal Planning", "⚡ Habit Builder", "📈 Progress Analysis"])
+        
+        with coach_tabs[0]:  # Ask Coach
+            st.markdown(f"### 💬 Ask Your AI Coach")
+            
+            # This line replaces your "context = ''" line with the correct DB call
+            pdf_context = db.get_all_document_content()
+            
+            with st.form("ask_coach_form"):
+                question = st.text_area("What would you like guidance on?")
+                submitted = st.form_submit_button("Seek Wisdom")
+                
+                if submitted and question:
+                    if has_api_key:
+                        with st.spinner("Consulting the ancient texts..."):
+                            response = ai_coach.client.messages.create(
+                                model="claude-3-5-sonnet-20240620",
+                                max_tokens=1000,
+                                messages=[{
+                                    "role": "user", 
+                                    "content": f"Context: {pdf_context[:5000]}\n\nUser Question: {question}"
+                                }]
+                            )
+                            st.markdown("### 📜 The Coach's Guidance")
+                            st.write(response.content[0].text)
+                    else:
+                        st.error("API Key required.")
         
         # Tabs for different AI Coach features
         coach_tabs = st.tabs(["💬 Ask Coach", "🎯 Goal Planning", "⚡ Habit Builder", "📈 Progress Analysis"])
