@@ -930,7 +930,6 @@ else:
                     st.markdown("---")
             else:
                 st.caption("No completed goals yet. Complete your first to unlock achievements!")
-
     # ===== AI COACH PAGE =====
     elif current_page == "AI Coach":
         user_name = profile.get('display_name', 'Hunter')
@@ -980,7 +979,7 @@ else:
         # Tabs for different AI Coach features
         coach_tabs = st.tabs(["💬 Ask Coach", "🎯 Goal Planning", "⚡ Habit Builder", "📈 Progress Analysis"])
         
-        with coach_tabs[0]:  # Ask Coach
+      with coach_tabs[0]:  # Ask Coach
             st.markdown(f"### 💬 Ask Your AI Coach")
             
             # Retrieves all uploaded content to give the AI context
@@ -988,7 +987,11 @@ else:
             
             with st.form("ask_coach_form"):
                 question = st.text_area("What would you like guidance on?")
-                # ... rest of your existing form logic
+                submitted = st.form_submit_button("Seek Wisdom")
+                
+                if submitted and question:
+                    # Your logic for handling the question goes here
+                    pass
                                 # Build context
                                 context = ""
                                 
