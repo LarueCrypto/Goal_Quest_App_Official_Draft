@@ -952,6 +952,9 @@ else:
                             # Save to your database
                             db.save_document(uploaded_file.name, text, analysis)
                             st.success(f"Successfully added '{uploaded_file.name}' to your knowledge base!")
+# --------------------------------
+
+        has_api_key = ai_coach.client is not N
                                 # Build context
                                 context = ""
                                 
