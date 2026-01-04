@@ -940,24 +940,18 @@ else:
             st.markdown(f"### 💬 Ask Your AI Coach")
             
             # Get all PDF context
-            pdf_context = db.get_all_document_content()
-            
-            with st.form("ask_coach_form"):
-                question = st.text_area(
-                    "What would you like guidance on?",
-                    height=150,
-                    placeholder="Example: How can I stay motivated when I feel stuck?"
-                )
-                
-                include_library = st.checkbox("📚 Include context from my Philosophy Library", value=True)
-                include_progress = st.checkbox("📊 Include my current habits and goals", value=True)
-                
-                submitted = st.form_submit_button("🤖 Get AI Guidance", use_container_width=True)
-                
-                if submitted and question:
-                    if ai_coach.client:
-                        with st.spinner(f"🤖 AI Coach is thinking..."):
-                            try:
+            with st.expander("📚 Upload Wisdom to your Library", expanded=False):
+            uploaded_file = st.file_uploader("Upload a Philosophy PDF for the Coach to study", type="pdf")
+            if uploaded_file:
+                if st.button("Analyze & Save to Library"):
+                    with st.spinner("The Coach is studying your document..."):
+                        text = extract_pdf_text(uploaded_file)
+                        if text:
+                            # Analyze using the code we fixed in ai_coach.py
+                            analysis = ai_coach.analyze_pdf_content(text, uploaded_file.name)
+                            # Save to your database
+                            db.save_document(uploaded_file.name, text, analysis)
+                            st.success(f"Successfully added '{uploaded_file.name}' to your knowledge base!")
                                 # Build context
                                 context = ""
                                 
