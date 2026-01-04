@@ -12,6 +12,20 @@ from shop_items import ALL_SHOP_ITEMS, RARITY_COLORS, get_items_by_category, get
 from utils import *
 import json
 
+def extract_pdf_text(uploaded_file):
+    """Extracts text content from an uploaded PDF file."""
+    try:
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
+        text = ""
+        for page in pdf_reader.pages:
+            content = page.extract_text()
+            if content:
+                text += content
+        return text
+    except Exception as e:
+        st.error(f"Error reading PDF: {e}")
+        return ""
+        
 # Page config
 st.set_page_config(
     page_title="Goal Quest",
@@ -924,12 +938,42 @@ else:
         st.title(f"🤖 AI Coach for {user_name}")
         st.markdown(f"Your personal guide on the path to mastery.")
         
+        # --- PDF UPLOADER FOR PHILOSOPHY LIBRARY ---
+        with st.expander("📚 Upload Wisdom to your Library", expanded=False):
+            uploaded_file = st.file_uploader("Upload a Philosophy PDF for the Coach to study", type="pdf")
+            
+            if uploaded_file:
+                if st.button("Analyze & Save to Library"):
+                    with st.spinner("The Coach is studying your document..."):
+                        # 1. Extract text from the PDF
+                        pdf_text = extract_pdf_text(uploaded_file)
+                        
+                        if pdf_text:
+                            # 2. Save raw document to the 'philosophy_documents' table
+                            doc_id = db.upload_document(
+                                filename=uploaded_file.name,
+                                content=pdf_text,
+                                file_type="pdf",
+                                file_size=uploaded_file.size
+                            )
+                            
+                            # 3. Generate AI analysis (summary, concepts, themes)
+                            analysis = ai_coach.analyze_pdf_content(pdf_text, uploaded_file.name)
+                            
+                            # 4. Update the record with the analysis results
+                            db.update_document(
+                                doc_id, 
+                                ai_summary=analysis.get('summary', ''), 
+                                key_concepts=analysis.get('key_concepts', [])
+                            )
+                            
+                            st.success(f"Successfully added '{uploaded_file.name}' to your knowledge base!")
+        
         # Check if AI is available
         has_api_key = ai_coach.client is not None
         
         if not has_api_key:
             st.warning("⚠️ AI Coach requires an Anthropic API key. Add it in Streamlit Cloud secrets.")
-            st.info("💡 Without AI, you'll get basic coaching responses.")
         
         st.markdown("---")
         
@@ -939,22 +983,12 @@ else:
         with coach_tabs[0]:  # Ask Coach
             st.markdown(f"### 💬 Ask Your AI Coach")
             
-            # Get all PDF context
-            with st.expander("📚 Upload Wisdom to your Library", expanded=False):
-            uploaded_file = st.file_uploader("Upload a Philosophy PDF for the Coach to study", type="pdf")
-            if uploaded_file:
-                if st.button("Analyze & Save to Library"):
-                    with st.spinner("The Coach is studying your document..."):
-                        text = extract_pdf_text(uploaded_file)
-                        if text:
-                            # Analyze using the code we fixed in ai_coach.py
-                            analysis = ai_coach.analyze_pdf_content(text, uploaded_file.name)
-                            # Save to your database
-                            db.save_document(uploaded_file.name, text, analysis)
-                            st.success(f"Successfully added '{uploaded_file.name}' to your knowledge base!")
-# --------------------------------
-
-        has_api_key = ai_coach.client is not N
+            # Retrieves all uploaded content to give the AI context
+            pdf_context = db.get_all_document_content()
+            
+            with st.form("ask_coach_form"):
+                question = st.text_area("What would you like guidance on?")
+                # ... rest of your existing form logic
                                 # Build context
                                 context = ""
                                 
